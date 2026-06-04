@@ -17,6 +17,10 @@ bool WifiSetup::connectOrConfig(MinerConfig& cfg) {
                                     cfg.poolPrimaryUrl.c_str(), 64);
     char portBuf[8]; snprintf(portBuf, sizeof(portBuf), "%u", cfg.poolPrimaryPort);
     WiFiManagerParameter pPoolPort("pport",  "Pool Port", portBuf, 6);
+    WiFiManagerParameter pPoolPass("ppass1", "Pool Password",
+                                    cfg.poolPrimaryPassword.c_str(), 32);
+    char diffBuf[12]; snprintf(diffBuf, sizeof(diffBuf), "%.6f", cfg.poolPrimarySuggestDiff);
+    WiFiManagerParameter pPoolDiff("pdiff1", "Suggested Diff", diffBuf, 10);
     WiFiManagerParameter pWallet  ("wallet", "BTC Wallet Address",
                                     cfg.walletAddress.c_str(), 100);
     WiFiManagerParameter pWorker  ("worker", "Worker Name",
@@ -24,6 +28,8 @@ bool WifiSetup::connectOrConfig(MinerConfig& cfg) {
 
     wm.addParameter(&pPoolUrl);
     wm.addParameter(&pPoolPort);
+    wm.addParameter(&pPoolPass);
+    wm.addParameter(&pPoolDiff);
     wm.addParameter(&pWallet);
     wm.addParameter(&pWorker);
 
@@ -37,6 +43,8 @@ bool WifiSetup::connectOrConfig(MinerConfig& cfg) {
     // Apply values from the portal
     cfg.poolPrimaryUrl  = pPoolUrl.getValue();
     cfg.poolPrimaryPort = atoi(pPoolPort.getValue());
+    cfg.poolPrimaryPassword = pPoolPass.getValue();
+    cfg.poolPrimarySuggestDiff = atof(pPoolDiff.getValue());
     cfg.walletAddress   = pWallet.getValue();
     cfg.workerName      = pWorker.getValue();
     cfg.wifiSsid        = WiFi.SSID();

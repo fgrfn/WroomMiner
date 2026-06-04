@@ -18,7 +18,17 @@ bool Config::load(MinerConfig& cfg) {
     cfg.poolPrimaryPort   = prefs.getUShort("pport",     cfg.poolPrimaryPort);
     cfg.poolFallbackUrl   = prefs.getString("fpool",     cfg.poolFallbackUrl);
     cfg.poolFallbackPort  = prefs.getUShort("fport",     cfg.poolFallbackPort);
-    cfg.poolPassword      = prefs.getString("ppass",     cfg.poolPassword);
+    String legacyPassword = prefs.isKey("ppass")
+        ? prefs.getString("ppass", cfg.poolPrimaryPassword)
+        : cfg.poolPrimaryPassword;
+    cfg.poolPrimaryPassword = prefs.isKey("ppass1")
+        ? prefs.getString("ppass1", legacyPassword)
+        : legacyPassword;
+    cfg.poolPrimarySuggestDiff = prefs.getDouble("pdiff1", cfg.poolPrimarySuggestDiff);
+    cfg.poolFallbackPassword = prefs.isKey("ppass2")
+        ? prefs.getString("ppass2", legacyPassword)
+        : legacyPassword;
+    cfg.poolFallbackSuggestDiff = prefs.getDouble("pdiff2", cfg.poolFallbackSuggestDiff);
     cfg.walletAddress     = prefs.getString("wallet",    cfg.walletAddress);
     cfg.workerName        = prefs.getString("worker",    cfg.workerName);
     cfg.wifiSsid          = prefs.getString("ssid",      cfg.wifiSsid);
@@ -40,7 +50,10 @@ bool Config::save(const MinerConfig& cfg) {
     prefs.putUShort("pport",   cfg.poolPrimaryPort);
     prefs.putString("fpool",   cfg.poolFallbackUrl);
     prefs.putUShort("fport",   cfg.poolFallbackPort);
-    prefs.putString("ppass",   cfg.poolPassword);
+    prefs.putString("ppass1",  cfg.poolPrimaryPassword);
+    prefs.putString("ppass2",  cfg.poolFallbackPassword);
+    prefs.putDouble("pdiff1",  cfg.poolPrimarySuggestDiff);
+    prefs.putDouble("pdiff2",  cfg.poolFallbackSuggestDiff);
     prefs.putString("wallet",  cfg.walletAddress);
     prefs.putString("worker",  cfg.workerName);
     prefs.putString("ssid",    cfg.wifiSsid);

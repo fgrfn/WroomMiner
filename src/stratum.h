@@ -58,11 +58,13 @@ public:
     // Connect to the pool. Blocks until connected or timeout.
     bool connect(const String& host, uint16_t port,
                  const String& wallet, const String& worker,
-                 const String& password);
+                 const String& password,
+                 double suggestedDifficulty = 0.0);
 
     void disconnect();
 
     bool isConnected() { return _client.connected(); }
+    double currentDifficulty() const { return _currentDifficulty; }
 
     // Called by the mining task when a share is found.
     // extranonce2, nTime and nonce as hex strings.
@@ -82,6 +84,7 @@ public:
 
 private:
     bool sendJson(const String& json);
+    bool suggestDifficulty();
     void processLine(const String& line);
     void handleNotify(JsonArrayConst params);
     void handleSetDifficulty(JsonArrayConst params);
@@ -89,7 +92,16 @@ private:
 
     WiFiClient    _client;
     String        _rxBuffer;
+    String        _authorizedWorker;
+    String        _connectedHost;
+    uint16_t      _connectedPort = 0;
     uint32_t      _msgId = 1;
+    uint32_t      _subscribeId = 0;
+    uint32_t      _suggestDifficultyId = 0;
+    uint32_t      _authorizeId = 0;
+    uint32_t      _pendingSubmitId = 0;
+    uint32_t      _lastSuggestDifficultyMs = 0;
+    double        _suggestedDifficulty = 0.0;
     double        _currentDifficulty = 1.0;
     StratumJob    _currentJob;
 

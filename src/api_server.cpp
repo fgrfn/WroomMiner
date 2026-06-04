@@ -9,8 +9,120 @@
 #include <esp_idf_version.h>
 #include <ArduinoJson.h>
 #include <AsyncJson.h>
+#include <Update.h>
 
 namespace WroomMiner {
+
+namespace {
+
+static const char INDEX_HTML[] PROGMEM = R"HTML(
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WroomMiner</title>
+<style>
+:root{color-scheme:dark;--bg:#101418;--panel:#171d22;--line:#2c3740;--text:#eef4f0;--muted:#9aa9a2;--green:#5dd39e;--amber:#f4b860;--blue:#75b8ff;--red:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1040px;margin:0 auto;padding:20px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.mark{width:38px;height:38px;border:2px solid var(--green);display:grid;place-items:center;color:var(--green);font-weight:800}.title h1{font-size:22px;margin:0}.title p{margin:1px 0 0;color:var(--muted)}.state{display:flex;align-items:center;gap:8px;color:var(--muted)}.dot{width:10px;height:10px;background:var(--red);border-radius:50%}.dot.ok{background:var(--green)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}.card{padding:12px}.label{color:var(--muted);font-size:12px}.value{font-size:22px;font-weight:750;margin-top:4px}.unit{font-size:13px;color:var(--muted)}.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.panel{padding:14px}h2{font-size:15px;margin:0 0 12px}.fields{display:grid;grid-template-columns:1fr 110px;gap:10px}.full{grid-column:1/-1}label{display:grid;gap:5px;color:var(--muted);font-size:12px}input{width:100%;border:1px solid var(--line);border-radius:6px;background:#0d1115;color:var(--text);padding:10px;font:inherit}input:focus{outline:1px solid var(--blue)}.toggle{display:flex;align-items:center;gap:8px}.toggle input{width:auto}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid var(--line);border-radius:6px;background:#22303a;color:var(--text);padding:10px 12px;font:inherit;cursor:pointer}button.primary{background:#1f5f47;border-color:#2d8a68}button.warn{background:#5a3d1c;border-color:#9a682d}.rows{display:grid;gap:8px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:7px}.row:last-child{border-bottom:0;padding-bottom:0}.status{min-height:20px;color:var(--amber);margin-top:10px}@media (max-width:820px){main{padding:12px}.grid,.layout{grid-template-columns:1fr 1fr}.layout{display:block}.panel{margin-bottom:12px}.fields{grid-template-columns:1fr}}@media (max-width:520px){header{align-items:flex-start}.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.value{font-size:20px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="brand"><div class="mark">W</div><div class="title"><h1>WroomMiner</h1><p id="version">loading</p></div></div>
+  <div class="state"><span id="wifiDot" class="dot"></span><span id="wifiText">offline</span></div>
+</header>
+<section class="grid">
+  <div class="card"><div class="label">Hashrate 1s</div><div class="value"><span id="hash1s">0</span> <span class="unit">H/s</span></div></div>
+  <div class="card"><div class="label">Hashrate 1m</div><div class="value"><span id="hash1m">0</span> <span class="unit">H/s</span></div></div>
+  <div class="card"><div class="label">Shares</div><div class="value"><span id="shares">0 / 0</span></div></div>
+  <div class="card"><div class="label">Best difficulty</div><div class="value"><span id="bestDiff">0</span></div></div>
+</section>
+<section class="layout">
+  <div class="panel">
+    <h2>Configuration</h2>
+    <form id="configForm">
+      <div class="fields">
+        <label class="full">Wallet address<input id="wallet_address" name="wallet_address" autocomplete="off"></label>
+        <label class="full">Worker<input id="worker_name" name="worker_name"></label>
+        <label>Primary pool<input id="pool_primary_url" name="pool_primary_url"></label>
+        <label>Port<input id="pool_primary_port" name="pool_primary_port" type="number" min="1" max="65535"></label>
+        <label class="full">Primary pool password<input id="pool_primary_password" name="pool_primary_password" placeholder="unchanged"></label>
+        <label class="full">Primary suggested difficulty<input id="pool_primary_suggest_difficulty" name="pool_primary_suggest_difficulty" type="number" min="0" step="0.00001"></label>
+        <label>Fallback pool<input id="pool_fallback_url" name="pool_fallback_url"></label>
+        <label>Port<input id="pool_fallback_port" name="pool_fallback_port" type="number" min="1" max="65535"></label>
+        <label class="full">Fallback pool password<input id="pool_fallback_password" name="pool_fallback_password" placeholder="unchanged"></label>
+        <label class="full">Fallback suggested difficulty<input id="pool_fallback_suggest_difficulty" name="pool_fallback_suggest_difficulty" type="number" min="0" step="0.00001"></label>
+        <label>UDP broadcast sec<input id="udp_broadcast_sec" name="udp_broadcast_sec" type="number" min="0" max="255"></label>
+        <label>API port<input id="api_port" name="api_port" type="number" min="1" max="65535"></label>
+        <label class="toggle full"><input id="led_enabled" name="led_enabled" type="checkbox"> LED enabled</label>
+      </div>
+      <div class="actions"><button class="primary" type="submit">Save</button><button type="button" id="restartBtn">Restart</button><button type="button" class="warn" id="resetBtn">Factory reset</button></div>
+      <div class="status" id="formStatus"></div>
+    </form>
+    <h2>Firmware update</h2>
+    <input id="otaFile" type="file" accept=".bin">
+    <div class="actions"><button type="button" id="otaBtn">Upload OTA</button></div>
+    <div class="status" id="otaStatus"></div>
+  </div>
+  <div class="panel">
+    <h2>Device</h2>
+    <div class="rows">
+      <div class="row"><span class="label">IP</span><span id="ip">-</span></div>
+      <div class="row"><span class="label">SSID</span><span id="ssid">-</span></div>
+      <div class="row"><span class="label">RSSI</span><span id="rssi">-</span></div>
+      <div class="row"><span class="label">Active pool</span><span id="pool">-</span></div>
+      <div class="row"><span class="label">Uptime</span><span id="uptime">0s</span></div>
+      <div class="row"><span class="label">Free heap</span><span id="heap">-</span></div>
+    </div>
+  </div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1});
+async function getJson(url){const r=await fetch(url);if(!r.ok)throw new Error(url);return r.json();}
+function setVal(id,v){const e=$(id);if(e)e.value=v??'';}
+function fillConfig(c){['wallet_address','worker_name','pool_primary_url','pool_primary_port','pool_primary_suggest_difficulty','pool_fallback_url','pool_fallback_port','pool_fallback_suggest_difficulty','udp_broadcast_sec','api_port'].forEach(k=>setVal(k,c[k]));$('led_enabled').checked=!!c.led_enabled;}
+async function refresh(){
+ try{
+  const [status,mining,network,pool,info]=await Promise.all([getJson('/api/v1/status'),getJson('/api/v1/mining'),getJson('/api/v1/network'),getJson('/api/v1/pool'),getJson('/api/v1/info')]);
+  $('version').textContent=info.version+' | '+info.compatible_with;
+  $('wifiDot').className='dot '+(status.wifi_connected?'ok':'');
+  $('wifiText').textContent=status.wifi_connected?'online':'offline';
+  $('hash1s').textContent=fmt(mining.hashrate_1s_hs);$('hash1m').textContent=fmt(mining.hashrate_1m_hs);
+  $('shares').textContent=(mining.shares_accepted||0)+' / '+(mining.shares_rejected||0);$('bestDiff').textContent=fmt(mining.best_difficulty);
+  $('ip').textContent=network.ip||'-';$('ssid').textContent=network.ssid||'-';$('rssi').textContent=(network.rssi||0)+' dBm';
+  $('pool').textContent=pool.connected?(pool.active_kind+' '+pool.active_url+':'+pool.active_port):'disconnected';$('uptime').textContent=(mining.uptime_seconds||0)+'s';$('heap').textContent=fmt(status.free_heap);
+ }catch(e){}
+}
+async function load(){fillConfig(await getJson('/api/v1/config'));refresh();}
+$('configForm').addEventListener('submit',async e=>{
+ e.preventDefault();const f=e.currentTarget;const body={};
+ ['wallet_address','worker_name','pool_primary_url','pool_fallback_url'].forEach(k=>body[k]=f[k].value.trim());
+ ['pool_primary_port','pool_fallback_port','udp_broadcast_sec','api_port'].forEach(k=>body[k]=Number(f[k].value));
+ ['pool_primary_suggest_difficulty','pool_fallback_suggest_difficulty'].forEach(k=>body[k]=Number(f[k].value));
+ if(f.pool_primary_password.value.trim())body.pool_primary_password=f.pool_primary_password.value.trim();
+ if(f.pool_fallback_password.value.trim())body.pool_fallback_password=f.pool_fallback_password.value.trim();
+ body.led_enabled=f.led_enabled.checked;
+ const r=await fetch('/api/v1/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ $('formStatus').textContent=r.ok?'Saved. Restart required.':'Save failed.';
+});
+$('restartBtn').onclick=()=>fetch('/api/v1/action/restart',{method:'POST'});
+$('resetBtn').onclick=()=>{if(confirm('Factory reset?'))fetch('/api/v1/action/reset',{method:'POST'});};
+$('otaBtn').onclick=async()=>{
+ const file=$('otaFile').files[0];if(!file){$('otaStatus').textContent='Select a firmware .bin first.';return;}
+ const body=new FormData();body.append('firmware',file,file.name);$('otaStatus').textContent='Uploading...';
+ const r=await fetch('/api/v1/ota',{method:'POST',body});$('otaStatus').textContent=r.ok?'Uploaded. Restarting...':'OTA failed.';
+};
+load();setInterval(refresh,1000);
+</script>
+</body>
+</html>
+)HTML";
+
+} // namespace
 
 ApiServer::ApiServer() {}
 
@@ -42,14 +154,26 @@ void ApiServer::stop() {
     }
 }
 
+void ApiServer::setPoolState(const String& activeKind,
+                             const String& activeUrl,
+                             uint16_t activePort,
+                             bool connected) {
+    _activePoolKind = activeKind;
+    _activePoolUrl = activeUrl;
+    _activePoolPort = activePort;
+    _poolConnected = connected;
+}
+
 void ApiServer::setupRoutes() {
     // --- Root ---
     _server->on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
-        req->send(200, "text/html",
-            "<h1>WroomMiner</h1>"
-            "<p>API: <a href='/api/v1/status'>/api/v1/status</a></p>"
-            "<p>Version " WROOMMINER_VERSION "</p>");
+        req->send(200, "text/html", INDEX_HTML);
     });
+
+    // --- HashHive / NMMiner-compatible discovery endpoints ---
+    _server->on("/probe", HTTP_GET, [this](AsyncWebServerRequest* r){ handleCompatProbe(r); });
+    _server->on("/api/system/info", HTTP_GET, [this](AsyncWebServerRequest* r){ handleCompatSystemInfo(r); });
+    _server->on("/api/system/restart", HTTP_POST, [this](AsyncWebServerRequest* r){ handleRestart(r); });
 
     // --- GET endpoints ---
     _server->on("/api/v1/status",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleStatus(r); });
@@ -70,6 +194,12 @@ void ApiServer::setupRoutes() {
                 [this](AsyncWebServerRequest* r){ handleRestart(r); });
     _server->on("/api/v1/action/reset",   HTTP_POST,
                 [this](AsyncWebServerRequest* r){ handleFactoryReset(r); });
+    _server->on("/api/v1/ota", HTTP_POST,
+                [this](AsyncWebServerRequest* r){ handleOtaPost(r); },
+                [this](AsyncWebServerRequest* r, const String& filename,
+                       size_t index, uint8_t* data, size_t len, bool final) {
+                    handleOtaUpload(r, filename, index, data, len, final);
+                });
 
     // 404
     _server->onNotFound([](AsyncWebServerRequest* req) {
@@ -132,8 +262,11 @@ void ApiServer::handlePool(AsyncWebServerRequest* req) {
     fallback["url"]  = _cfg->poolFallbackUrl;
     fallback["port"] = _cfg->poolFallbackPort;
 
-    root["active"]    = "primary"; // TODO: make dynamic in Phase 2
-    root["connected"] = true;
+    root["active"]      = _activePoolKind;
+    root["active_kind"] = _activePoolKind;
+    root["active_url"]  = _activePoolUrl;
+    root["active_port"] = _activePoolPort;
+    root["connected"]   = _poolConnected;
     root["worker"]    = _cfg->workerName;
 
     res->setLength();
@@ -191,15 +324,17 @@ void ApiServer::handleConfigGet(AsyncWebServerRequest* req) {
 
     root["pool_primary_url"]   = _cfg->poolPrimaryUrl;
     root["pool_primary_port"]  = _cfg->poolPrimaryPort;
+    root["pool_primary_suggest_difficulty"] = _cfg->poolPrimarySuggestDiff;
     root["pool_fallback_url"]  = _cfg->poolFallbackUrl;
     root["pool_fallback_port"] = _cfg->poolFallbackPort;
+    root["pool_fallback_suggest_difficulty"] = _cfg->poolFallbackSuggestDiff;
     root["wallet_address"]     = _cfg->walletAddress;
     root["worker_name"]        = _cfg->workerName;
     root["wifi_ssid"]          = _cfg->wifiSsid;
     root["led_enabled"]        = _cfg->ledEnabled;
     root["udp_broadcast_sec"]  = _cfg->udpBroadcastSec;
     root["api_port"]           = _cfg->apiPort;
-    // pool_password intentionally NOT returned
+    // pool passwords intentionally NOT returned
 
     res->setLength();
     req->send(res);
@@ -219,6 +354,82 @@ void ApiServer::handleInfo(AsyncWebServerRequest* req) {
     root["build_date"]      = __DATE__ " " __TIME__;
     root["api_version"]     = "v1";
     root["compatible_with"] = "HashHive";
+
+    res->setLength();
+    req->send(res);
+}
+
+void ApiServer::handleCompatProbe(AsyncWebServerRequest* req) {
+    AsyncJsonResponse* res = new AsyncJsonResponse();
+    JsonObject root = res->getRoot().to<JsonObject>();
+
+    auto& s = Stats::get();
+    root["model"]    = WROOMMINER_NAME;
+    root["hostname"] = WiFi.getHostname();
+    root["ver"]      = WROOMMINER_VERSION;
+    root["hr"]       = s.hashrate1s.load();
+    root["sbd"]      = s.sessionBestDiff.load();
+    root["ebd"]      = s.bestDifficulty.load();
+    root["ut"]       = Stats::uptimeSeconds();
+    root["mac"]      = WiFi.macAddress();
+    root["api"]      = "wroomminer";
+
+    res->setLength();
+    req->send(res);
+}
+
+void ApiServer::handleCompatSystemInfo(AsyncWebServerRequest* req) {
+    AsyncJsonResponse* res = new AsyncJsonResponse();
+    JsonObject root = res->getRoot().to<JsonObject>();
+
+    auto& s = Stats::get();
+    String activePool = _poolConnected && _activePoolUrl.length() > 0
+        ? _activePoolUrl + ":" + String(_activePoolPort)
+        : "";
+    String worker = _cfg->walletAddress;
+    if (_cfg->workerName.length() > 0) {
+        worker += "." + _cfg->workerName;
+    }
+
+    JsonObject identity = root["identity"].to<JsonObject>();
+    identity["model"]     = WROOMMINER_NAME;
+    identity["hostName"]  = WiFi.getHostname();
+    identity["fwVersion"] = WROOMMINER_VERSION;
+    identity["mac"]       = WiFi.macAddress();
+    identity["rssi"]      = WiFi.RSSI();
+    identity["ip"]        = WiFi.localIP().toString();
+
+    JsonObject miner = root["miner"].to<JsonObject>();
+    miner["hashRate"]      = s.hashrate1s.load();
+    miner["hashRateUnit"]  = "H/s";
+    miner["hashRateHs"]    = s.hashrate1s.load();
+    miner["hashRate1mHs"]  = s.hashrate1m.load();
+    miner["uptimeSeconds"] = Stats::uptimeSeconds();
+    miner["bestDiffEver"]  = s.bestDifficulty.load();
+    miner["lastDiff"]      = s.sessionBestDiff.load();
+    miner["sAccepted"]     = s.sharesAccepted.load();
+    miner["sRejected"]     = s.sharesRejected.load();
+    miner["blocksFound"]   = s.blocksFound.load();
+
+    JsonObject stratum = root["stratum"].to<JsonObject>();
+    stratum["url"]       = activePool;
+    stratum["user"]      = worker;
+    stratum["connected"] = _poolConnected;
+    stratum["active"]    = _activePoolKind;
+
+    JsonObject temps = root["temps"].to<JsonObject>();
+    temps["asic"]  = nullptr;
+    temps["vcore"] = nullptr;
+
+    JsonObject storage = root["storage"].to<JsonObject>();
+    storage["freeHeap"]      = ESP.getFreeHeap();
+    storage["minFreeHeap"]   = ESP.getMinFreeHeap();
+    storage["flashSize"]     = ESP.getFlashChipSize();
+    storage["sketchSize"]    = ESP.getSketchSize();
+    storage["sketchFree"]    = ESP.getFreeSketchSpace();
+
+    root["compatible_with"] = "HashHive";
+    root["api"] = "wroomminer";
 
     res->setLength();
     req->send(res);
@@ -248,17 +459,44 @@ void ApiServer::handleConfigPost(AsyncWebServerRequest* req, JsonVariant& body) 
     if (in["pool_fallback_port"].is<int>()) {
         _cfg->poolFallbackPort = in["pool_fallback_port"]; changed = true;
     }
+    if (in["pool_primary_suggest_difficulty"].is<double>() || in["pool_primary_suggest_difficulty"].is<int>()) {
+        double value = in["pool_primary_suggest_difficulty"].as<double>();
+        if (value >= 0.0) {
+            _cfg->poolPrimarySuggestDiff = value; changed = true;
+        }
+    }
+    if (in["pool_fallback_suggest_difficulty"].is<double>() || in["pool_fallback_suggest_difficulty"].is<int>()) {
+        double value = in["pool_fallback_suggest_difficulty"].as<double>();
+        if (value >= 0.0) {
+            _cfg->poolFallbackSuggestDiff = value; changed = true;
+        }
+    }
     if (in["wallet_address"].is<const char*>()) {
         _cfg->walletAddress = in["wallet_address"].as<String>(); changed = true;
     }
     if (in["worker_name"].is<const char*>()) {
         _cfg->workerName = in["worker_name"].as<String>(); changed = true;
     }
-    if (in["pool_password"].is<const char*>()) {
-        _cfg->poolPassword = in["pool_password"].as<String>(); changed = true;
+    if (in["pool_primary_password"].is<const char*>()) {
+        _cfg->poolPrimaryPassword = in["pool_primary_password"].as<String>(); changed = true;
+    }
+    if (in["pool_fallback_password"].is<const char*>()) {
+        _cfg->poolFallbackPassword = in["pool_fallback_password"].as<String>(); changed = true;
     }
     if (in["led_enabled"].is<bool>()) {
         _cfg->ledEnabled = in["led_enabled"]; changed = true;
+    }
+    if (in["udp_broadcast_sec"].is<int>()) {
+        int value = in["udp_broadcast_sec"];
+        if (value >= 0 && value <= 255) {
+            _cfg->udpBroadcastSec = uint8_t(value); changed = true;
+        }
+    }
+    if (in["api_port"].is<int>()) {
+        int value = in["api_port"];
+        if (value > 0 && value <= 65535) {
+            _cfg->apiPort = uint16_t(value); changed = true;
+        }
     }
 
     if (changed) {
@@ -266,6 +504,62 @@ void ApiServer::handleConfigPost(AsyncWebServerRequest* req, JsonVariant& body) 
         req->send(200, "application/json", "{\"status\":\"saved\",\"restart_required\":true}");
     } else {
         req->send(400, "application/json", "{\"error\":\"no_valid_fields\"}");
+    }
+}
+
+void ApiServer::handleOtaPost(AsyncWebServerRequest* req) {
+    if (_otaFailed || Update.hasError()) {
+        req->send(500, "application/json", "{\"status\":\"error\",\"error\":\"ota_failed\"}");
+        _otaFailed = false;
+        _otaBytes = 0;
+        Update.abort();
+        return;
+    }
+
+    char buf[96];
+    snprintf(buf, sizeof(buf), "{\"status\":\"ok\",\"bytes\":%u,\"will_restart\":true}",
+             static_cast<unsigned>(_otaBytes));
+    req->send(200, "application/json", buf);
+    _otaBytes = 0;
+    delay(500);
+    ESP.restart();
+}
+
+void ApiServer::handleOtaUpload(AsyncWebServerRequest* /*req*/,
+                                const String& filename,
+                                size_t index,
+                                uint8_t* data,
+                                size_t len,
+                                bool final) {
+    if (index == 0) {
+        _otaFailed = false;
+        _otaBytes = 0;
+        Serial.printf("[ota] upload started: %s\r\n", filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+            _otaFailed = true;
+            Update.printError(Serial);
+            return;
+        }
+    }
+
+    if (_otaFailed) {
+        return;
+    }
+
+    if (Update.write(data, len) != len) {
+        _otaFailed = true;
+        Update.printError(Serial);
+        return;
+    }
+    _otaBytes += len;
+
+    if (final) {
+        if (!Update.end(true)) {
+            _otaFailed = true;
+            Update.printError(Serial);
+            return;
+        }
+        Serial.printf("[ota] upload complete: %u bytes\r\n", static_cast<unsigned>(_otaBytes));
     }
 }
 

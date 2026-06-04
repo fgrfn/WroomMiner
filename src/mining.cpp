@@ -160,7 +160,22 @@ void MiningEngine::stop() {
 void MiningEngine::onNewJob(const StratumJob& job) {
     _activeJob = job;
     _jobEpoch++;  // Signal to the task that the old work is stale
+    Serial.printf("[I/WM] Mining work queued : job=%s diff=%.6f branches=%u en2_size=%u\r\n",
+                  job.jobId.c_str(),
+                  job.difficulty,
+                  job.merkleCount,
+                  job.extranonce2Size);
     log_i("Mining: new job %s, epoch %u", job.jobId.c_str(), _jobEpoch);
+}
+
+void MiningEngine::onDifficulty(double difficulty) {
+    if (!_activeJob.valid) {
+        return;
+    }
+
+    _activeJob.difficulty = difficulty;
+    _jobEpoch++;
+    log_i("Mining: difficulty updated to %.6f, epoch %u", difficulty, _jobEpoch);
 }
 
 void MiningEngine::taskTrampoline(void* arg) {
@@ -258,10 +273,15 @@ void MiningEngine::taskLoop() {
     uint32_t extranonce2 = 0;
     uint32_t nonce = 0;
     uint32_t hashesSinceReport = 0;
+    bool waitingForJobLogged = false;
 
     while (_running) {
         // Wait for the first job
         if (!_activeJob.valid) {
+            if (!waitingForJobLogged) {
+                Serial.println("[I/WM] Waiting for first mining job from pool");
+                waitingForJobLogged = true;
+            }
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
@@ -273,6 +293,12 @@ void MiningEngine::taskLoop() {
             nonce = 0;
             buildHeader(_activeJob, extranonce2, header);
             targetForDifficulty(_activeJob.difficulty, shareTarget);
+            waitingForJobLogged = false;
+            Serial.printf("[I/WM] Mining work prepared : job=%s epoch=%lu diff=%.6f extranonce2=%08lx\r\n",
+                          _activeJob.jobId.c_str(),
+                          static_cast<unsigned long>(localEpoch),
+                          _activeJob.difficulty,
+                          static_cast<unsigned long>(extranonce2));
             log_d("Mining: rebuilt header for epoch %u", localEpoch);
         }
 
@@ -304,7 +330,16 @@ void MiningEngine::taskLoop() {
                 );
 
                 if (sent) {
+                    Serial.printf("[L/WM] Share candidate submitted : job=%s nonce=%08lx en2=%s pool_diff=%.6f\r\n",
+                                  _activeJob.jobId.c_str(),
+                                  static_cast<unsigned long>(nonce),
+                                  en2Hex,
+                                  _activeJob.difficulty);
                     log_i("Mining: SHARE submitted (nonce=%08x)", nonce);
+                } else {
+                    Serial.printf("[W/WM] Share candidate not submitted : job=%s nonce=%08lx\r\n",
+                                  _activeJob.jobId.c_str(),
+                                  static_cast<unsigned long>(nonce));
                 }
             }
 

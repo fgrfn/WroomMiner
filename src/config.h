@@ -11,9 +11,12 @@ struct MinerConfig {
     // --- Pool ---
     String poolPrimaryUrl     = "public-pool.io";
     uint16_t poolPrimaryPort  = 21496;
+    String poolPrimaryPassword = "x";
+    double poolPrimarySuggestDiff = 0.00015;
     String poolFallbackUrl    = "solo.ckpool.org";
     uint16_t poolFallbackPort = 3333;
-    String poolPassword       = "x";
+    String poolFallbackPassword = "x";
+    double poolFallbackSuggestDiff = 0.00015;
 
     // --- Wallet / worker ---
     String walletAddress      = "";

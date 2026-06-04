@@ -1,4 +1,4 @@
-# CLAUDE.md
+ok # CLAUDE.md
 
 Context for working on WroomMiner with Claude Code.
 

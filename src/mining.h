@@ -24,6 +24,9 @@ public:
     // Resets the current work.
     void onNewJob(const StratumJob& job);
 
+    // Called when the pool changes share difficulty.
+    void onDifficulty(double difficulty);
+
     bool isRunning() const { return _running; }
 
 private:

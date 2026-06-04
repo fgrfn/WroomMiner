@@ -2,7 +2,7 @@
 #  WroomMiner partition scheme for ESP32-WROOM-32D (4 MB)
 #
 #  Layout:
-#    - 24 KB NVS    (config, stats, best diff persistent)
+#    - 20 KB NVS    (config, stats, best diff persistent)
 #    - 8  KB OTAdata
 #    - 1.92 MB app0 (active firmware)
 #    - 1.92 MB app1 (OTA slot for new firmware)
@@ -11,9 +11,18 @@
 #  Total: 4 MB - fully OTA-capable.
 # ============================================================
 
+<<<<<<< HEAD
 # Name,   Type, SubType, Offset,   Size,     Flags
 nvs,      data, nvs,     0x9000,   0x5000,
 otadata,  data, ota,     0xE000,   0x2000,
 app0,     app,  ota_0,   0x10000,  0x1E0000,
 app1,     app,  ota_1,   0x1F0000, 0x1E0000,
 spiffs,   data, spiffs,  0x3D0000, 0x30000,
+=======
+# Name,    Type, SubType,  Offset,   Size,     Flags
+nvs,       data, nvs,      0x9000,   0x5000,
+otadata,   data, ota,      0xe000,   0x2000,
+app0,      app,  ota_0,    0x10000,  0x1E0000,
+app1,      app,  ota_1,    0x1F0000, 0x1E0000,
+spiffs,    data, spiffs,   0x3D0000, 0x30000,
+>>>>>>> f1501a98b16afe2b436bfb24d54bb23617d1e329

@@ -200,11 +200,11 @@ void MiningEngine::buildHeader(const StratumJob& job,
     header80[2] = (job.version >> 16) & 0xFF;
     header80[3] = (job.version >> 24) & 0xFF;
 
-    // prevHash (Stratum provides big-endian, header needs little-endian)
-    // Simplified in Phase 1: byte-reverse the whole 32-byte field
-    for (int i = 0; i < 32; ++i) {
-        header80[4 + i] = job.prevHash[31 - i];
-    }
+    // prevHash: Stratum sends each 4-byte word in big-endian; the block header
+    // needs each word in little-endian (per-word byte swap, not a full 32-byte flip).
+    for (int w = 0; w < 8; ++w)
+        for (int b = 0; b < 4; ++b)
+            header80[4 + w*4 + b] = job.prevHash[w*4 + (3 - b)];
 
     uint8_t coinbase[512];
     size_t coinbaseLen = 0;
@@ -316,6 +316,12 @@ void MiningEngine::taskLoop() {
 
             // Compute SHA256d
             sha256d(header, 80, hash);
+
+            // mbedTLS SHA256d output is big-endian (MSB at index 0).
+            // hashMeetsTarget and the target use little-endian, so byte-reverse.
+            for (int _i = 0, _j = 31; _i < _j; ++_i, --_j) {
+                uint8_t _t = hash[_i]; hash[_i] = hash[_j]; hash[_j] = _t;
+            }
 
             if (hashMeetsTarget(hash, shareTarget)) {
                 // Plausible share - submit to the pool

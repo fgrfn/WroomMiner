@@ -1,4 +1,4 @@
-ok # CLAUDE.md
+# CLAUDE.md
 
 Context for working on WroomMiner with Claude Code.
 
@@ -31,28 +31,20 @@ pio device monitor      # serial log at 115200
 Always run `pio run` after changes and fix any compiler errors before
 considering a task done.
 
-## Highest-priority TODO
+## Known open items
 
-`src/mining.cpp::buildHeader()` currently zeroes the Merkle root
-(`memset(header80 + 36, 0, 32)`). Until this is implemented, shares are computed
-but the pool will reject them. The correct algorithm (Stratum v1):
-
-1. `coinbase = coinbase1 + extranonce1 + extranonce2 + coinbase2` (hex → bytes)
-2. `merkleRoot = sha256d(coinbase)`
-3. for each branch in `job.merkleBranches[0..merkleCount]`:
-   `merkleRoot = sha256d(merkleRoot || branch)`
-4. write `merkleRoot` into `header80[36..67]` (watch endianness)
-
-After that, validate the full target check against the pool's share difficulty
-(the current code uses a placeholder `hashHi == 0` test).
-
-## Other open items
-
+**Phase 3 (performance):**
 - Real midstate optimization in `src/sha256d.cpp::sha256d_with_midstate()`
-  (currently a naive fallback).
+  — function exists but currently dead code (mining loop calls `sha256d()` directly).
+  Phase 3 will skip the first SHA256 round via precomputed midstate.
 - Hardware SHA256 via `esp_sha` (Phase 3).
-- UDP LAN broadcast for HashHive discovery (Phase 2).
-- `POST /api/v1/ota` endpoint (Phase 3).
+- Dual-core mining — currently only Core 1 mines.
+
+**Minor / low priority:**
+- `nTime` is not incremented during long mining sessions on a single job
+  (extra nonce space available by law but not used).
+- Temperature sensor in `api_server.cpp::handleSystem()` always returns `-1`
+  (ESP32-WROOM-32D has no built-in temperature sensor).
 - Dynamic `active` pool reporting in `api_server.cpp::handlePool()`.
 
 ## Conventions

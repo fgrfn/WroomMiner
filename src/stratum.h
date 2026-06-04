@@ -62,7 +62,7 @@ public:
 
     void disconnect();
 
-    bool isConnected() const { return _client.connected(); }
+    bool isConnected() { return _client.connected(); }
 
     // Called by the mining task when a share is found.
     // extranonce2, nTime and nonce as hex strings.

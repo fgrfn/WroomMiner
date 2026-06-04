@@ -72,8 +72,8 @@ static void printMiningOverview() {
     auto& s = Stats::get();
 
     char uptime[18];
-    char hash1s[18];
-    char hash1m[18];
+    char hash1s[14];
+    char hash1m[14];
     formatUptime(Stats::uptimeSeconds(), uptime, sizeof(uptime));
     formatHashrate(s.hashrate1s.load(), hash1s, sizeof(hash1s));
     formatHashrate(s.hashrate1m.load(), hash1m, sizeof(hash1m));
@@ -81,20 +81,44 @@ static void printMiningOverview() {
     const bool connected = g_stratum.isConnected();
     String poolStr = connected ? (g_activePoolHost + ":" + String(g_activePoolPort)) : "disconnected";
 
-    Serial.printf("┌─ %s  v%s  up %s  %ddBm\r\n",
-                  poolStr.c_str(), WROOMMINER_VERSION, uptime,
-                  WifiSetup::isConnected() ? WifiSetup::rssi() : 0);
-    Serial.printf("│  hashrate   %s (1s)  %s (1m)\r\n",
-                  hash1s, hash1m);
-    Serial.printf("│  shares     accepted %-4lu  rejected %lu\r\n",
-                  static_cast<unsigned long>(s.sharesAccepted.load()),
-                  static_cast<unsigned long>(s.sharesRejected.load()));
-    Serial.printf("│  diff       pool %.6f  best %.6f\r\n",
-                  connected ? g_stratum.currentDifficulty() : 0.0,
-                  s.bestDifficulty.load());
-    Serial.printf("└─ hashes %llu  heap %lukB\r\n",
-                  static_cast<unsigned long long>(s.hashCount.load()),
-                  static_cast<unsigned long>(ESP.getFreeHeap() / 1024));
+    uint32_t accepted = s.sharesAccepted.load();
+    uint32_t rejected = s.sharesRejected.load();
+    uint32_t submitted = accepted + rejected;
+
+    // Row widths (inner content between the outer # chars):
+    //   total line = 2 (##) + 1 space + content + 1 space + 2 (##) = 128
+    //   inner content width = 122
+    static const char* kRule =
+        "################################################################"
+        "################################################################";  // 128 #
+
+    // Header row
+    char hdr[130];
+    snprintf(hdr, sizeof(hdr), "# WroomMiner %s || uptime %s || active Pool: %-*s#",
+             WROOMMINER_VERSION, uptime,
+             (int)(128 - 2 - 3 - 12 - strlen(WROOMMINER_VERSION) - 11 - strlen(uptime) - 17), poolStr.c_str());
+
+    // Data row — fixed column widths matching the label row
+    char data[130];
+    snprintf(data, sizeof(data),
+             "#  %11s | %11s |  %5lu/%-5lu | %9.6f | %9.6f | %12llu | %6lukB | %4ddBm  #",
+             hash1s, hash1m,
+             static_cast<unsigned long>(submitted),
+             static_cast<unsigned long>(rejected),
+             connected ? g_stratum.currentDifficulty() : 0.0,
+             s.bestDifficulty.load(),
+             static_cast<unsigned long long>(s.hashCount.load()),
+             static_cast<unsigned long>(ESP.getFreeHeap() / 1024),
+             WifiSetup::isConnected() ? WifiSetup::rssi() : 0);
+
+    Serial.printf("%s\r\n", kRule);
+    Serial.printf("%-128s\r\n", hdr);
+    Serial.printf("%s\r\n", kRule);
+    Serial.println("# hashrate 1s  | hashrate 1m  | shares sub/rej | pool diff | best diff |  tot hashes |   heap   |   rssi  #");
+    Serial.printf("%-128s\r\n", data);
+    Serial.printf("%s\r\n", kRule);
+    Serial.println("# WebFlasher: http://flash.fgrfn.de  -  Github: https://github.com/fgrfn/WroomMiner                       #");
+    Serial.printf("%s\r\n", kRule);
 }
 
 // ============================================================

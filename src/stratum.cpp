@@ -308,15 +308,18 @@ bool StratumClient::submitShare(const String& jobId,
                                 uint32_t nonce) {
     char buf[256];
     _pendingSubmitId = _msgId++;
-    // nTime and nonce are stored little-endian in our header; the pool places
-    // the submitted hex bytes directly into its verification header, so we
-    // must submit them in the same byte order (little-endian = bswap of the
-    // integer before %08x).
+    // Stratum expects nTime and nonce as big-endian hex strings, matching the
+    // byte order that the pool originally sent them in (and that the pool's
+    // verifier will reconstruct). nTime is stored as a native uint32 parsed
+    // from the pool's big-endian hex, so %08x gives the correct big-endian
+    // representation. nonce is iterated as a native uint32 written
+    // little-endian into the header bytes, and Stratum submit also expects
+    // it as a little-endian hex string — so %08x is correct for both.
     snprintf(buf, sizeof(buf),
              "{\"id\":%u,\"method\":\"mining.submit\",\"params\":"
              "[\"%s\",\"%s\",\"%s\",\"%08x\",\"%08x\"]}\n",
              _pendingSubmitId, _authorizedWorker.c_str(), jobId.c_str(), extranonce2.c_str(),
-             __builtin_bswap32(nTime), __builtin_bswap32(nonce));
+             nTime, nonce);
     return sendJson(String(buf));
 }
 

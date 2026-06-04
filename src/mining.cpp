@@ -14,9 +14,121 @@
 #include "sha256d.h"
 #include "stats.h"
 #include <esp_log.h>
+#include <cstdio>
 #include <cstring>
 
 namespace WroomMiner {
+
+namespace {
+
+int hexNibble(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+bool appendHexBytes(const String& hex, uint8_t* out, size_t outCapacity, size_t& outLen) {
+    if ((hex.length() % 2) != 0) return false;
+
+    size_t byteCount = hex.length() / 2;
+    if (outLen + byteCount > outCapacity) return false;
+
+    for (size_t i = 0; i < byteCount; ++i) {
+        int hi = hexNibble(hex[i * 2]);
+        int lo = hexNibble(hex[i * 2 + 1]);
+        if (hi < 0 || lo < 0) return false;
+        out[outLen++] = uint8_t((hi << 4) | lo);
+    }
+
+    return true;
+}
+
+bool hexToBytes32(const String& hex, uint8_t* out) {
+    if (hex.length() != 64) return false;
+
+    size_t outLen = 0;
+    return appendHexBytes(hex, out, 32, outLen) && outLen == 32;
+}
+
+void extranonce2ToHex(uint32_t extranonce2, uint8_t extranonce2Size, char* out, size_t outSize) {
+    size_t hexLen = size_t(extranonce2Size) * 2;
+    if (hexLen + 1 > outSize) {
+        out[0] = '\0';
+        return;
+    }
+
+    for (size_t i = 0; i < hexLen; ++i) {
+        out[i] = '0';
+    }
+    out[hexLen] = '\0';
+
+    char counterHex[9];
+    snprintf(counterHex, sizeof(counterHex), "%08x", extranonce2);
+
+    size_t copyLen = hexLen < 8 ? hexLen : 8;
+    memcpy(out + hexLen - copyLen, counterHex + 8 - copyLen, copyLen);
+}
+
+void setDiff1Target(uint8_t* target) {
+    memset(target, 0, 32);
+    target[26] = 0xFF;
+    target[27] = 0xFF;
+}
+
+bool multiplyTarget(uint8_t* target, uint32_t multiplier) {
+    uint64_t carry = 0;
+    for (size_t i = 0; i < 32; ++i) {
+        uint64_t value = uint64_t(target[i]) * multiplier + carry;
+        target[i] = uint8_t(value & 0xFF);
+        carry = value >> 8;
+    }
+    return carry == 0;
+}
+
+void divideTarget(uint8_t* target, uint32_t divisor) {
+    uint32_t remainder = 0;
+    for (int i = 31; i >= 0; --i) {
+        uint32_t value = (remainder << 8) | target[i];
+        target[i] = uint8_t(value / divisor);
+        remainder = value % divisor;
+    }
+}
+
+void targetForDifficulty(double difficulty, uint8_t* target) {
+    constexpr uint32_t DIFFICULTY_SCALE = 1000000;
+
+    if (difficulty <= 0.0) {
+        difficulty = 1.0;
+    }
+
+    double scaledDouble = difficulty * DIFFICULTY_SCALE;
+    while (scaledDouble > 4000000000.0) {
+        scaledDouble /= 10.0;
+    }
+
+    uint32_t scaledDifficulty = uint32_t(scaledDouble + 0.5);
+    if (scaledDifficulty == 0) {
+        scaledDifficulty = 1;
+    }
+
+    setDiff1Target(target);
+    if (!multiplyTarget(target, DIFFICULTY_SCALE)) {
+        memset(target, 0xFF, 32);
+        return;
+    }
+    divideTarget(target, scaledDifficulty);
+}
+
+bool hashMeetsTarget(const uint8_t* hash, const uint8_t* target) {
+    for (int i = 31; i >= 0; --i) {
+        if (hash[i] < target[i]) return true;
+        if (hash[i] > target[i]) return false;
+    }
+    return true;
+}
+
+} // namespace
 
 MiningEngine::MiningEngine() {}
 
@@ -79,14 +191,43 @@ void MiningEngine::buildHeader(const StratumJob& job,
         header80[4 + i] = job.prevHash[31 - i];
     }
 
-    // TODO Phase 1: compute the Merkle root.
-    //   1. coinbase = coinbase1 + extranonce1 + extranonce2 + coinbase2
-    //   2. merkleRoot = sha256d(coinbase)
-    //   3. for each branch in job.merkleBranches:
-    //        merkleRoot = sha256d(merkleRoot + branch)
-    //   4. write merkleRoot into header80[36..67]
-    // Current placeholder (shares will be REJECTED until implemented):
-    memset(header80 + 36, 0, 32);
+    uint8_t coinbase[512];
+    size_t coinbaseLen = 0;
+    char extranonce2Hex[17];
+    extranonce2ToHex(extranonce2, job.extranonce2Size, extranonce2Hex, sizeof(extranonce2Hex));
+
+    bool merkleOk = extranonce2Hex[0] != '\0' &&
+                    appendHexBytes(job.coinbase1, coinbase, sizeof(coinbase), coinbaseLen) &&
+                    appendHexBytes(job.extranonce1, coinbase, sizeof(coinbase), coinbaseLen) &&
+                    appendHexBytes(String(extranonce2Hex), coinbase, sizeof(coinbase), coinbaseLen) &&
+                    appendHexBytes(job.coinbase2, coinbase, sizeof(coinbase), coinbaseLen);
+
+    uint8_t merkleRoot[32];
+    if (merkleOk) {
+        sha256d(coinbase, coinbaseLen, merkleRoot);
+
+        for (uint8_t branchIndex = 0; branchIndex < job.merkleCount; ++branchIndex) {
+            uint8_t branch[32];
+            uint8_t merkleInput[64];
+            if (!hexToBytes32(job.merkleBranches[branchIndex], branch)) {
+                merkleOk = false;
+                break;
+            }
+
+            memcpy(merkleInput, merkleRoot, 32);
+            memcpy(merkleInput + 32, branch, 32);
+            sha256d(merkleInput, sizeof(merkleInput), merkleRoot);
+        }
+    }
+
+    if (merkleOk) {
+        for (int i = 0; i < 32; ++i) {
+            header80[36 + i] = merkleRoot[31 - i];
+        }
+    } else {
+        log_w("Mining: invalid Merkle data for job %s", job.jobId.c_str());
+        memset(header80 + 36, 0, 32);
+    }
 
     // nTime (little-endian)
     header80[68] = (job.nTime >> 0)  & 0xFF;
@@ -112,6 +253,7 @@ void MiningEngine::taskLoop() {
 
     uint8_t  header[80];
     uint8_t  hash[32];
+    uint8_t  shareTarget[32];
     uint32_t localEpoch = 0;
     uint32_t extranonce2 = 0;
     uint32_t nonce = 0;
@@ -130,6 +272,7 @@ void MiningEngine::taskLoop() {
             extranonce2 = 0;
             nonce = 0;
             buildHeader(_activeJob, extranonce2, header);
+            targetForDifficulty(_activeJob.difficulty, shareTarget);
             log_d("Mining: rebuilt header for epoch %u", localEpoch);
         }
 
@@ -148,21 +291,10 @@ void MiningEngine::taskLoop() {
             // Compute SHA256d
             sha256d(header, 80, hash);
 
-            // Target check: simple variant that checks whether the
-            // most significant 4 bytes (big-endian!) are small enough.
-            // Bitcoin convention: the hash is little-endian, so we read
-            // the last 4 bytes as a big 32-bit word.
-            uint32_t hashHi = (uint32_t(hash[31]) << 24) |
-                              (uint32_t(hash[30]) << 16) |
-                              (uint32_t(hash[29]) << 8)  |
-                              (uint32_t(hash[28]) << 0);
-
-            // Phase 1: simple threshold match for diff=1 shares
-            // (equivalent to hash[28..31] == 0x00000000ffffffff)
-            if (hashHi == 0) {
+            if (hashMeetsTarget(hash, shareTarget)) {
                 // Plausible share - submit to the pool
-                char en2Hex[16];
-                snprintf(en2Hex, sizeof(en2Hex), "%08x", extranonce2);
+                char en2Hex[17];
+                extranonce2ToHex(extranonce2, _activeJob.extranonce2Size, en2Hex, sizeof(en2Hex));
 
                 bool sent = _stratum->submitShare(
                     _activeJob.jobId,

@@ -262,12 +262,23 @@ void ApiServer::handlePool(AsyncWebServerRequest* req) {
     fallback["url"]  = _cfg->poolFallbackUrl;
     fallback["port"] = _cfg->poolFallbackPort;
 
+    String fullWorker = _cfg->walletAddress;
+    if (_cfg->workerName.length() > 0) {
+        fullWorker += "." + _cfg->workerName;
+    }
+    String activePool = _poolConnected && _activePoolUrl.length() > 0
+        ? _activePoolUrl + ":" + String(_activePoolPort)
+        : "";
+
     root["active"]      = _activePoolKind;
     root["active_kind"] = _activePoolKind;
     root["active_url"]  = _activePoolUrl;
     root["active_port"] = _activePoolPort;
     root["connected"]   = _poolConnected;
-    root["worker"]    = _cfg->workerName;
+    root["pool"]        = activePool;
+    root["stratumURL"]  = activePool;
+    root["worker"]      = fullWorker;
+    root["stratumUser"] = fullWorker;
 
     res->setLength();
     req->send(res);
@@ -354,6 +365,7 @@ void ApiServer::handleInfo(AsyncWebServerRequest* req) {
     root["build_date"]      = __DATE__ " " __TIME__;
     root["api_version"]     = "v1";
     root["compatible_with"] = "HashHive";
+    root["_type"]           = "wroomminer";
 
     res->setLength();
     req->send(res);
@@ -429,7 +441,8 @@ void ApiServer::handleCompatSystemInfo(AsyncWebServerRequest* req) {
     storage["sketchFree"]    = ESP.getFreeSketchSpace();
 
     root["compatible_with"] = "HashHive";
-    root["api"] = "wroomminer";
+    root["_type"]           = "wroomminer";
+    root["api"]             = "wroomminer";
 
     res->setLength();
     req->send(res);

@@ -37,22 +37,22 @@ bool StratumClient::connect(const String& host, uint16_t port,
     IPAddress resolvedIp;
     bool resolved = WiFi.hostByName(host.c_str(), resolvedIp);
     if (resolved) {
-        Serial.printf("[I/WM] Resolving pool address [%s] -> [%s]\r\n",
+        Serial.printf("Resolving pool address [%s] -> [%s]\r\n",
                       host.c_str(),
                       resolvedIp.toString().c_str());
     } else {
-        Serial.printf("[W/WM] DNS failed for pool address [%s]\r\n", host.c_str());
+        Serial.printf("DNS failed for pool address [%s]\r\n", host.c_str());
     }
 
     bool connected = resolved
         ? _client.connect(resolvedIp, port, 10000)
         : _client.connect(host.c_str(), port, 10000);
     if (!connected) {
-        Serial.printf("[E/WM] Failed to connect to pool [%s:%u]\r\n", host.c_str(), port);
+        Serial.printf("Failed to connect to pool [%s:%u]\r\n", host.c_str(), port);
         log_w("Stratum: connect failed");
         return false;
     }
-    Serial.printf("[I/WM] Connected to pool [%s:%u]\r\n", host.c_str(), port);
+    Serial.printf("Connected to pool [%s:%u]\r\n", host.c_str(), port);
 
     _client.setNoDelay(true);
     _rxBuffer = "";
@@ -64,7 +64,7 @@ bool StratumClient::connect(const String& host, uint16_t port,
     _lastSuggestDifficultyMs = 0;
 
     // 1. Subscribe
-    Serial.println("[I/WM] Sending mining.subscribe (requesting job stream)...");
+    Serial.println("Sending mining.subscribe (requesting job stream)...");
     String subscribe = String("{\"id\":") + _subscribeId +
                        ",\"method\":\"mining.subscribe\",\"params\":[\"" +
                        WROOMMINER_NAME + "\"]}\n";
@@ -81,7 +81,7 @@ bool StratumClient::connect(const String& host, uint16_t port,
     }
 
     if (_currentJob.extranonce1.length() == 0) {
-        Serial.println("[E/WM] Failed to read mining.subscribe response");
+        Serial.println("Failed to read mining.subscribe response");
         log_w("Stratum: subscribe timeout");
         disconnect();
         return false;
@@ -95,7 +95,7 @@ bool StratumClient::connect(const String& host, uint16_t port,
     _authorizedWorker = fullWorker;
     _authorizeId = _msgId++;
 
-    Serial.printf("[I/WM] Sending mining.authorize : %s\r\n", fullWorker.c_str());
+    Serial.printf("Sending mining.authorize : %s\r\n", fullWorker.c_str());
     String authorize = String("{\"id\":") + _authorizeId +
                        ",\"method\":\"mining.authorize\",\"params\":[\"" +
                        fullWorker + "\",\"" + password + "\"]}\n";
@@ -145,7 +145,7 @@ bool StratumClient::suggestDifficulty() {
     String suggest = String("{\"id\":") + _suggestDifficultyId +
                      ",\"method\":\"mining.suggest_difficulty\",\"params\":[" +
                      String(_suggestedDifficulty, 8) + "]}\n";
-    Serial.printf("[I/WM] Suggesting pool difficulty : %.8f\r\n", _suggestedDifficulty);
+    log_d("Stratum: suggesting difficulty %.8f", _suggestedDifficulty);
     if (!sendJson(suggest)) return false;
 
     _lastSuggestDifficultyMs = millis();
@@ -209,7 +209,7 @@ void StratumClient::processLine(const String& line) {
             if (result.size() >= 3) {
                 _currentJob.extranonce1     = String((const char*)result[1]);
                 _currentJob.extranonce2Size = result[2].as<uint8_t>();
-                Serial.printf("[I/WM] mining.subscribe successful, extranonce1=%s, en2_size=%u\r\n",
+                Serial.printf("mining.subscribe successful, extranonce1=%s, en2_size=%u\r\n",
                               _currentJob.extranonce1.c_str(),
                               _currentJob.extranonce2Size);
                 log_i("Stratum: extranonce1=%s en2_size=%u",
@@ -221,20 +221,20 @@ void StratumClient::processLine(const String& line) {
         else if (id == _authorizeId) {
             bool authorized = doc["result"].is<bool>() && doc["result"].as<bool>();
             if (authorized) {
-                Serial.println("[I/WM] mining.authorize accepted");
+                Serial.println("mining.authorize accepted");
                 log_i("Stratum: worker authorized");
             } else {
-                Serial.println("[W/WM] mining.authorize rejected");
+                Serial.println("mining.authorize rejected");
                 log_w("Stratum: authorize failed");
             }
         }
         // Suggested difficulty response: pools may accept, ignore or reject this hint.
         else if (id == _suggestDifficultyId) {
             if (!doc["error"].isNull()) {
-                Serial.printf("[W/WM] Suggest difficulty rejected: %s\r\n",
+                Serial.printf("Suggest difficulty rejected: %s\r\n",
                               doc["error"].as<String>().c_str());
             } else {
-                Serial.println("[I/WM] Suggest difficulty acknowledged");
+                Serial.println("Suggest difficulty acknowledged");
             }
         }
         // Submit response
@@ -277,14 +277,7 @@ void StratumClient::handleNotify(JsonArrayConst params) {
     job.valid = true;
 
     _currentJob = job;
-    Serial.printf("[L/WM] Job [%s] from [%s:%u]\r\n",
-                  job.jobId.c_str(),
-                  _connectedHost.c_str(),
-                  _connectedPort);
-    if (job.cleanJobs) {
-        Serial.println("[L/WM] Job clean");
-    }
-    log_i("Stratum: new job %s clean=%d", job.jobId.c_str(), job.cleanJobs);
+    log_d("Stratum: new job %s clean=%d", job.jobId.c_str(), job.cleanJobs);
 
     if (_jobCb) _jobCb(job);
 }
@@ -292,7 +285,7 @@ void StratumClient::handleNotify(JsonArrayConst params) {
 void StratumClient::handleSetDifficulty(JsonArrayConst params) {
     if (params.size() < 1) return;
     _currentDifficulty = params[0].as<double>();
-    Serial.printf("[I/WM] Pool difficulty set : %.6f\r\n", _currentDifficulty);
+    Serial.printf("Pool difficulty set : %.6f\r\n", _currentDifficulty);
     log_i("Stratum: difficulty set to %.6f", _currentDifficulty);
     if (_diffCb) _diffCb(_currentDifficulty);
 }
@@ -315,10 +308,15 @@ bool StratumClient::submitShare(const String& jobId,
                                 uint32_t nonce) {
     char buf[256];
     _pendingSubmitId = _msgId++;
+    // nTime and nonce are stored little-endian in our header; the pool places
+    // the submitted hex bytes directly into its verification header, so we
+    // must submit them in the same byte order (little-endian = bswap of the
+    // integer before %08x).
     snprintf(buf, sizeof(buf),
              "{\"id\":%u,\"method\":\"mining.submit\",\"params\":"
              "[\"%s\",\"%s\",\"%s\",\"%08x\",\"%08x\"]}\n",
-             _pendingSubmitId, _authorizedWorker.c_str(), jobId.c_str(), extranonce2.c_str(), nTime, nonce);
+             _pendingSubmitId, _authorizedWorker.c_str(), jobId.c_str(), extranonce2.c_str(),
+             __builtin_bswap32(nTime), __builtin_bswap32(nonce));
     return sendJson(String(buf));
 }
 

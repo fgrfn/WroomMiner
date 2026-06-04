@@ -79,25 +79,22 @@ static void printMiningOverview() {
     formatHashrate(s.hashrate1m.load(), hash1m, sizeof(hash1m));
 
     const bool connected = g_stratum.isConnected();
-    String pool = connected
-        ? g_activePoolHost + ":" + String(g_activePoolPort)
-        : "disconnected";
+    String poolStr = connected ? (g_activePoolHost + ":" + String(g_activePoolPort)) : "disconnected";
 
-    Serial.printf("\r\n[WM] Mining status | fw=%s | uptime=%s | pool=%s\r\n",
-                  WROOMMINER_VERSION,
-                  uptime,
-                  pool.c_str());
-    Serial.println("| hashrate 1s | hashrate 1m | share(R/A) | pool diff | best diff | total hashes | freeheap | rssi |");
-    Serial.printf("| %11s | %11s | %5lu/%-5lu | %9.6f | %9.6f | %12llu | %6lukB | %4ddBm |\r\n",
-                  hash1s,
-                  hash1m,
-                  static_cast<unsigned long>(s.sharesRejected.load()),
-                  static_cast<unsigned long>(s.sharesAccepted.load()),
-                  connected ? g_stratum.currentDifficulty() : 0.0,
-                  s.bestDifficulty.load(),
-                  static_cast<unsigned long long>(s.hashCount.load()),
-                  static_cast<unsigned long>(ESP.getFreeHeap() / 1024),
+    Serial.printf("┌─ %s  v%s  up %s  %ddBm\r\n",
+                  poolStr.c_str(), WROOMMINER_VERSION, uptime,
                   WifiSetup::isConnected() ? WifiSetup::rssi() : 0);
+    Serial.printf("│  hashrate   %s (1s)  %s (1m)\r\n",
+                  hash1s, hash1m);
+    Serial.printf("│  shares     accepted %-4lu  rejected %lu\r\n",
+                  static_cast<unsigned long>(s.sharesAccepted.load()),
+                  static_cast<unsigned long>(s.sharesRejected.load()));
+    Serial.printf("│  diff       pool %.6f  best %.6f\r\n",
+                  connected ? g_stratum.currentDifficulty() : 0.0,
+                  s.bestDifficulty.load());
+    Serial.printf("└─ hashes %llu  heap %lukB\r\n",
+                  static_cast<unsigned long long>(s.hashCount.load()),
+                  static_cast<unsigned long>(ESP.getFreeHeap() / 1024));
 }
 
 // ============================================================
@@ -109,7 +106,7 @@ static bool connectToPool(bool useFallback = false) {
     String password = useFallback ? g_config.poolFallbackPassword : g_config.poolPrimaryPassword;
     double suggestedDifficulty = useFallback ? g_config.poolFallbackSuggestDiff : g_config.poolPrimarySuggestDiff;
 
-    Serial.printf("[I/WM] Connecting to %s pool [%s:%u]\r\n",
+    Serial.printf("Connecting to %s pool [%s:%u]...\r\n",
                   useFallback ? "fallback" : "primary",
                   host.c_str(),
                   port);
@@ -132,7 +129,7 @@ static bool connectToPool(bool useFallback = false) {
         if (!g_stratum.isConnected()) {
             g_api.setPoolState("none", "", 0, false);
         }
-        Serial.printf("[W/WM] Pool connection failed, retry in %lu ms\r\n",
+        Serial.printf("Pool connection failed, retry in %lu ms\r\n",
                       static_cast<unsigned long>(g_reconnectDelayMs));
         log_w("Pool: connect failed, will retry");
         g_reconnectDelayMs = min<uint32_t>(g_reconnectDelayMs * 2, 60000);
@@ -187,18 +184,14 @@ void setup() {
             Stats::recordShareAccepted(diff);
             Stats::persist();
             auto& s = Stats::get();
-            Serial.printf("[L/WM] #%lu share accepted from [%s:%u], diff=%.6f\r\n",
+            Serial.printf("SHARE ACCEPTED  #%lu  diff=%.6f\r\n",
                           static_cast<unsigned long>(s.sharesAccepted.load()),
-                          g_activePoolHost.c_str(),
-                          g_activePoolPort,
                           diff);
         } else {
             Stats::recordShareRejected();
             auto& s = Stats::get();
-            Serial.printf("[W/WM] #%lu share rejected from [%s:%u]\r\n",
-                          static_cast<unsigned long>(s.sharesRejected.load()),
-                          g_activePoolHost.c_str(),
-                          g_activePoolPort);
+            Serial.printf("SHARE REJECTED  #%lu total rejected\r\n",
+                          static_cast<unsigned long>(s.sharesRejected.load()));
         }
     });
 

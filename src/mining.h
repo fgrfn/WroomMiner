@@ -27,6 +27,9 @@ public:
     // Called when the pool changes share difficulty.
     void onDifficulty(double difficulty);
 
+    // Local floor used when a pool silently rejects lower-difficulty shares.
+    void setMinimumShareDifficulty(double difficulty);
+
     bool isRunning() const { return _running; }
 
 private:
@@ -46,6 +49,7 @@ private:
     // Current job (copied from Stratum, lock-free via epoch counter)
     StratumJob           _activeJob;
     volatile uint32_t    _jobEpoch = 0; // incremented on every new job
+    volatile float       _minShareDifficulty = 0.0f;
 };
 
 } // namespace WroomMiner

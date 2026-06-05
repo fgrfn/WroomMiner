@@ -71,6 +71,9 @@ void extranonce2ToHex(uint32_t extranonce2, uint8_t extranonce2Size, char* out, 
 }
 
 void setDiff1Target(uint8_t* target) {
+    // Bitcoin diff1 target (LE byte array, index 0 = LSB):
+    // 0x00000000FFFF0000...0000 (BE) = bytes[4,5]=0xFF in BE
+    // In LE: position 31-4=27, 31-5=26 -> target[26]=0xFF, target[27]=0xFF
     memset(target, 0, 32);
     target[26] = 0xFF;
     target[27] = 0xFF;
@@ -128,6 +131,48 @@ bool hashMeetsTarget(const uint8_t* hash, const uint8_t* target) {
     return true;
 }
 
+void printHexBytes(const uint8_t* data, size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        Serial.printf("%02x", data[i]);
+    }
+}
+
+void printShareContext(const StratumJob& job,
+                       const char* extranonce2Hex,
+                       const uint8_t* header,
+                       const uint8_t* hash) {
+    Serial.printf("[ctx] job=%s version=%08lx ntime=%08lx nbits=%08lx clean=%u\r\n",
+                  job.jobId.c_str(),
+                  static_cast<unsigned long>(job.version),
+                  static_cast<unsigned long>(job.nTime),
+                  static_cast<unsigned long>(job.nBits),
+                  job.cleanJobs ? 1 : 0);
+    Serial.print("[ctx] prevhash=");
+    printHexBytes(job.prevHash, 32);
+    Serial.println();
+    Serial.printf("[ctx] extranonce1=%s extranonce2=%s en2_size=%u\r\n",
+                  job.extranonce1.c_str(),
+                  extranonce2Hex,
+                  job.extranonce2Size);
+    Serial.printf("[ctx] coinbase1=%s\r\n", job.coinbase1.c_str());
+    Serial.printf("[ctx] coinbase2=%s\r\n", job.coinbase2.c_str());
+    Serial.printf("[ctx] branches=%u\r\n", job.merkleCount);
+    for (uint8_t i = 0; i < job.merkleCount; ++i) {
+        Serial.printf("[ctx] branch%u=%s\r\n", i, job.merkleBranches[i].c_str());
+    }
+    Serial.print("[ctx] merkle_root_header=");
+    printHexBytes(header + 36, 32);
+    Serial.println();
+    Serial.print("[ctx] header=");
+    printHexBytes(header, 80);
+    Serial.println();
+    Serial.print("[ctx] hash=");
+    for (int i = 31; i >= 0; --i) {
+        Serial.printf("%02x", hash[i]);
+    }
+    Serial.println();
+}
+
 } // namespace
 
 MiningEngine::MiningEngine() {}
@@ -173,6 +218,14 @@ void MiningEngine::onDifficulty(double difficulty) {
     log_i("Mining: difficulty updated to %.6f, epoch %u", difficulty, _jobEpoch);
 }
 
+void MiningEngine::setMinimumShareDifficulty(double difficulty) {
+    if (difficulty < 0.0) {
+        difficulty = 0.0;
+    }
+    _minShareDifficulty = static_cast<float>(difficulty);
+    _jobEpoch++;
+}
+
 void MiningEngine::taskTrampoline(void* arg) {
     static_cast<MiningEngine*>(arg)->taskLoop();
     vTaskDelete(nullptr);
@@ -195,11 +248,8 @@ void MiningEngine::buildHeader(const StratumJob& job,
     header80[2] = (job.version >> 16) & 0xFF;
     header80[3] = (job.version >> 24) & 0xFF;
 
-    // prevHash: Stratum sends each 4-byte word in big-endian; the block header
-    // needs each word in little-endian (per-word byte swap, not a full 32-byte flip).
-    for (int w = 0; w < 8; ++w)
-        for (int b = 0; b < 4; ++b)
-            header80[4 + w*4 + b] = job.prevHash[w*4 + (3 - b)];
+    // Stratum sends prevHash in the byte order used by the serialized header.
+    memcpy(header80 + 4, job.prevHash, 32);
 
     uint8_t coinbase[512];
     size_t coinbaseLen = 0;
@@ -259,13 +309,13 @@ void MiningEngine::buildHeader(const StratumJob& job,
 void MiningEngine::taskLoop() {
     log_i("Mining task started on core %d", xPortGetCoreID());
 
-    uint8_t  header[80];
-    uint8_t  hash[32];
-    uint8_t  shareTarget[32];
+    uint8_t        header[80];
+    uint8_t        hash[32];
+    uint8_t        shareTarget[32];
+    Sha256Midstate midstate;
     uint32_t localEpoch = 0;
     uint32_t extranonce2 = 0;
     uint32_t nonce = 0;
-    uint32_t hashesSinceReport = 0;
     bool waitingForJobLogged = false;
 
     while (_running) {
@@ -285,39 +335,42 @@ void MiningEngine::taskLoop() {
             extranonce2 = 0;
             nonce = 0;
             buildHeader(_activeJob, extranonce2, header);
-            targetForDifficulty(_activeJob.difficulty, shareTarget);
+            sha256d_prepare_midstate(header, midstate);
+            double effectiveDifficulty = _activeJob.difficulty;
+            if (_minShareDifficulty > effectiveDifficulty) {
+                effectiveDifficulty = _minShareDifficulty;
+            }
+            targetForDifficulty(effectiveDifficulty, shareTarget);
             waitingForJobLogged = false;
-            Serial.printf("Job [%s] diff=%.6f branches=%u en2=%u\r\n",
+            Serial.printf("Job [%s] diff=%.6f submit>=%.6f branches=%u en2=%u\r\n",
                           _activeJob.jobId.c_str(),
                           _activeJob.difficulty,
+                          effectiveDifficulty,
                           _activeJob.merkleCount,
                           _activeJob.extranonce2Size);
-            log_d("Mining: rebuilt header for epoch %u", localEpoch);
         }
 
         // --- Hash a batch of nonces ---
-        // We do 1024 hashes per iteration and then check whether a new
-        // job has arrived - this keeps latency low.
-        constexpr uint32_t BATCH = 1024;
+        // 8192 hashes per batch; yields once per batch for watchdog + job check.
+        constexpr uint32_t BATCH = 8192;
+        uint32_t hashesDone = 0;
 
         for (uint32_t i = 0; i < BATCH; ++i) {
-            // Write the nonce into the header (little-endian)
-            header[76] = (nonce >> 0)  & 0xFF;
-            header[77] = (nonce >> 8)  & 0xFF;
-            header[78] = (nonce >> 16) & 0xFF;
-            header[79] = (nonce >> 24) & 0xFF;
-
-            // Compute SHA256d
-            sha256d(header, 80, hash);
-
-            // mbedTLS SHA256d output is big-endian (MSB at index 0).
-            // hashMeetsTarget and the target use little-endian, so byte-reverse.
-            for (int _i = 0, _j = 31; _i < _j; ++_i, --_j) {
-                uint8_t _t = hash[_i]; hash[_i] = hash[_j]; hash[_j] = _t;
+            if (localEpoch != _jobEpoch) {
+                break;
             }
 
+            sha256d_with_midstate(midstate, nonce, hash);
+            hashesDone++;
+
+            // sha256d output bytes are the little-endian uint256 used by
+            // Bitcoin target comparison. Do not reverse before comparing.
             if (hashMeetsTarget(hash, shareTarget)) {
-                // Plausible share - submit to the pool
+                header[76] = (nonce >>  0) & 0xFF;
+                header[77] = (nonce >>  8) & 0xFF;
+                header[78] = (nonce >> 16) & 0xFF;
+                header[79] = (nonce >> 24) & 0xFF;
+
                 char en2Hex[17];
                 extranonce2ToHex(extranonce2, _activeJob.extranonce2Size, en2Hex, sizeof(en2Hex));
 
@@ -333,6 +386,7 @@ void MiningEngine::taskLoop() {
                                   _activeJob.jobId.c_str(),
                                   static_cast<unsigned long>(nonce),
                                   _activeJob.difficulty);
+                    printShareContext(_activeJob, en2Hex, header, hash);
                 } else {
                     Serial.printf("Share send failed  job=%s nonce=%08lx\r\n",
                                   _activeJob.jobId.c_str(),
@@ -341,18 +395,19 @@ void MiningEngine::taskLoop() {
             }
 
             nonce++;
-            hashesSinceReport++;
 
             // When the nonce range is exhausted, advance extranonce2
             if (nonce == 0) {
                 extranonce2++;
                 buildHeader(_activeJob, extranonce2, header);
+                sha256d_prepare_midstate(header, midstate);
             }
         }
 
-        // Update stats
-        Stats::recordHashes(BATCH);
-        hashesSinceReport = 0;
+        // Count actual nonce attempts processed in this batch.
+        if (hashesDone > 0) {
+            Stats::recordHashes(hashesDone);
+        }
 
         // Small yield so the watchdog doesn't bite
         // (1 tick at 1ms tick rate = 1ms pause per batch)

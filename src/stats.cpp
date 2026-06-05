@@ -90,9 +90,11 @@ void Stats::persist() {
 
 void Stats::restore() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE, true)) return;
-    g_stats.bestDifficulty.store(prefs.getDouble("bestdiff", 0.0));
-    g_stats.blocksFound.store(prefs.getUInt("blocks", 0));
+    // Open writable so the namespace is created on first boot. A read-only open
+    // logs nvs_open NOT_FOUND before stats have ever been persisted.
+    if (!prefs.begin(NVS_NAMESPACE, false)) return;
+    g_stats.bestDifficulty.store(prefs.isKey("bestdiff") ? prefs.getDouble("bestdiff", 0.0) : 0.0);
+    g_stats.blocksFound.store(prefs.isKey("blocks") ? prefs.getUInt("blocks", 0) : 0);
     g_stats.startupMillis = millis();
     prefs.end();
 }

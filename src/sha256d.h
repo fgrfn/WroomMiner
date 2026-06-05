@@ -1,39 +1,37 @@
 // ============================================================
 //  sha256d.h - Double SHA-256 for Bitcoin mining
-//
-//  Phase 1: software implementation via mbedTLS
-//  Phase 3: switch to esp_sha (hardware acceleration)
-//           + midstate optimization (NerdMiner trick)
 // ============================================================
 #pragma once
-
 #include <Arduino.h>
 #include <stdint.h>
 
 namespace WroomMiner {
 
-// Computes SHA256(SHA256(data)).
-//   input:  data, len bytes
-//   output: 32-byte hash
 void sha256d(const uint8_t* data, size_t len, uint8_t* output);
 
-// Optimized variant specifically for the 80-byte Bitcoin block header.
-// Uses the midstate trick: the first 64 bytes of the header do not change
-// within a job - the SHA256 state after those 64 bytes can be precomputed
-// and reused.
 struct Sha256Midstate {
-    uint32_t state[8];
-    uint8_t  remainder[16]; // last 16 bytes of the header (nonce region)
+    uint32_t state[8];      // SHA256 state after header bytes 0-63
+    uint8_t  remainder[16]; // header bytes 64-79
 };
 
-// Computes the midstate for a 64-byte block.
-// Called once per job by the Stratum client.
 void sha256d_prepare_midstate(const uint8_t* header80, Sha256Midstate& midstate);
 
-// Hash using a prepared midstate + nonce.
-// ~5x faster than the naive variant. Output: 32 bytes.
-void sha256d_with_midstate(const Sha256Midstate& midstate,
-                           uint32_t nonce,
-                           uint8_t* output);
+enum class Sha256dBackend : uint8_t {
+    SoftwareMidstate,
+    HardwareMidstate,
+};
+
+void sha256d_set_backend(Sha256dBackend backend);
+Sha256dBackend sha256d_backend();
+const char* sha256d_backend_name();
+bool sha256d_try_enable_hardware_midstate(const Sha256Midstate& midstate,
+                                          uint32_t nonce,
+                                          const uint8_t* expected);
+
+// Returns true and writes the 32-byte SHA256d hash.
+// Kept as bool so a future proven early-exit filter can return false.
+bool IRAM_ATTR sha256d_with_midstate(const Sha256Midstate& midstate,
+                                     uint32_t nonce,
+                                     uint8_t* output);
 
 } // namespace WroomMiner

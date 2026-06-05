@@ -13,13 +13,16 @@ struct MinerConfig {
     uint16_t poolPrimaryPort  = 21496;
     String poolPrimaryPassword = "x";
     double poolPrimarySuggestDiff = 0.00015;
+    double poolPrimaryMinSubmitDiff = 0.001;
     String poolFallbackUrl    = "solo.ckpool.org";
     uint16_t poolFallbackPort = 3333;
     String poolFallbackPassword = "x";
     double poolFallbackSuggestDiff = 0.00015;
+    double poolFallbackMinSubmitDiff = 0.001;
 
     // --- Wallet / worker ---
     String walletAddress      = "";
+    String walletFallbackAddress = "";
     String workerName         = "wroom01";
 
     // --- WiFi (managed by WiFiManager, copy stored here) ---

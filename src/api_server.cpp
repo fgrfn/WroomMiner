@@ -24,7 +24,7 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
 <title>WroomMiner</title>
 <style>
 :root{color-scheme:dark;--bg:#101418;--panel:#171d22;--line:#2c3740;--text:#eef4f0;--muted:#9aa9a2;--green:#5dd39e;--amber:#f4b860;--blue:#75b8ff;--red:#ff6b6b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1040px;margin:0 auto;padding:20px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.mark{width:38px;height:38px;border:2px solid var(--green);display:grid;place-items:center;color:var(--green);font-weight:800}.title h1{font-size:22px;margin:0}.title p{margin:1px 0 0;color:var(--muted)}.state{display:flex;align-items:center;gap:8px;color:var(--muted)}.dot{width:10px;height:10px;background:var(--red);border-radius:50%}.dot.ok{background:var(--green)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}.card{padding:12px}.label{color:var(--muted);font-size:12px}.value{font-size:22px;font-weight:750;margin-top:4px}.unit{font-size:13px;color:var(--muted)}.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.panel{padding:14px}h2{font-size:15px;margin:0 0 12px}.fields{display:grid;grid-template-columns:1fr 110px;gap:10px}.full{grid-column:1/-1}label{display:grid;gap:5px;color:var(--muted);font-size:12px}input{width:100%;border:1px solid var(--line);border-radius:6px;background:#0d1115;color:var(--text);padding:10px;font:inherit}input:focus{outline:1px solid var(--blue)}.toggle{display:flex;align-items:center;gap:8px}.toggle input{width:auto}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid var(--line);border-radius:6px;background:#22303a;color:var(--text);padding:10px 12px;font:inherit;cursor:pointer}button.primary{background:#1f5f47;border-color:#2d8a68}button.warn{background:#5a3d1c;border-color:#9a682d}.rows{display:grid;gap:8px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:7px}.row:last-child{border-bottom:0;padding-bottom:0}.status{min-height:20px;color:var(--amber);margin-top:10px}@media (max-width:820px){main{padding:12px}.grid,.layout{grid-template-columns:1fr 1fr}.layout{display:block}.panel{margin-bottom:12px}.fields{grid-template-columns:1fr}}@media (max-width:520px){header{align-items:flex-start}.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.value{font-size:20px}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:1040px;margin:0 auto;padding:20px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.mark{width:38px;height:38px;border:2px solid var(--green);display:grid;place-items:center;color:var(--green);font-weight:800}.title h1{font-size:22px;margin:0}.title p{margin:1px 0 0;color:var(--muted)}.state{display:flex;align-items:center;gap:8px;color:var(--muted)}.dot{width:10px;height:10px;background:var(--red);border-radius:50%}.dot.ok{background:var(--green)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}.card{padding:12px}.label{color:var(--muted);font-size:12px}.value{font-size:22px;font-weight:750;margin-top:4px}.subvalue{color:var(--muted);font-size:12px;margin-top:3px}.unit{font-size:13px;color:var(--muted)}.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.panel{padding:14px}h2{font-size:15px;margin:0 0 12px}.fields{display:grid;grid-template-columns:1fr 110px;gap:10px}.full{grid-column:1/-1}label{display:grid;gap:5px;color:var(--muted);font-size:12px}input{width:100%;border:1px solid var(--line);border-radius:6px;background:#0d1115;color:var(--text);padding:10px;font:inherit}input:focus{outline:1px solid var(--blue)}.toggle{display:flex;align-items:center;gap:8px}.toggle input{width:auto}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid var(--line);border-radius:6px;background:#22303a;color:var(--text);padding:10px 12px;font:inherit;cursor:pointer}button.primary{background:#1f5f47;border-color:#2d8a68}button.warn{background:#5a3d1c;border-color:#9a682d}.rows{display:grid;gap:8px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:7px}.row:last-child{border-bottom:0;padding-bottom:0}.row span:last-child{text-align:right;overflow-wrap:anywhere}.status{min-height:20px;color:var(--amber);margin-top:10px}@media (max-width:820px){main{padding:12px}.grid,.layout{grid-template-columns:1fr 1fr}.layout{display:block}.panel{margin-bottom:12px}.fields{grid-template-columns:1fr}}@media (max-width:520px){header{align-items:flex-start}.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.value{font-size:20px}}
 </style>
 </head>
 <body>
@@ -34,26 +34,29 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
   <div class="state"><span id="wifiDot" class="dot"></span><span id="wifiText">offline</span></div>
 </header>
 <section class="grid">
-  <div class="card"><div class="label">Hashrate 1s</div><div class="value"><span id="hash1s">0</span> <span class="unit">H/s</span></div></div>
-  <div class="card"><div class="label">Hashrate 1m</div><div class="value"><span id="hash1m">0</span> <span class="unit">H/s</span></div></div>
-  <div class="card"><div class="label">Shares</div><div class="value"><span id="shares">0 / 0</span></div></div>
-  <div class="card"><div class="label">Best difficulty</div><div class="value"><span id="bestDiff">0</span></div></div>
+  <div class="card"><div class="label">Hashrate 1s</div><div class="value"><span id="hash1s">0 H/s</span></div></div>
+  <div class="card"><div class="label">Hashrate 1m</div><div class="value"><span id="hash1m">0 H/s</span></div></div>
+  <div class="card"><div class="label">Shares</div><div class="value"><span id="sharesAccepted">0</span><span class="unit"> ok</span></div><div class="subvalue"><span id="sharesDetail">0 submitted / 0 rejected</span></div></div>
+  <div class="card"><div class="label">Best difficulty</div><div class="value"><span id="bestDiff">0</span></div><div class="subvalue">Last share <span id="lastShare">never</span></div></div>
 </section>
 <section class="layout">
   <div class="panel">
     <h2>Configuration</h2>
     <form id="configForm">
       <div class="fields">
-        <label class="full">Wallet address<input id="wallet_address" name="wallet_address" autocomplete="off"></label>
+        <label class="full">Primary wallet address<input id="wallet_address" name="wallet_address" autocomplete="off"></label>
         <label class="full">Worker<input id="worker_name" name="worker_name"></label>
         <label>Primary pool<input id="pool_primary_url" name="pool_primary_url"></label>
         <label>Port<input id="pool_primary_port" name="pool_primary_port" type="number" min="1" max="65535"></label>
         <label class="full">Primary pool password<input id="pool_primary_password" name="pool_primary_password" placeholder="unchanged"></label>
         <label class="full">Primary suggested difficulty<input id="pool_primary_suggest_difficulty" name="pool_primary_suggest_difficulty" type="number" min="0" step="0.00001"></label>
+        <label class="full">Primary submit floor<input id="pool_primary_min_submit_difficulty" name="pool_primary_min_submit_difficulty" type="number" min="0" step="0.00001"></label>
         <label>Fallback pool<input id="pool_fallback_url" name="pool_fallback_url"></label>
         <label>Port<input id="pool_fallback_port" name="pool_fallback_port" type="number" min="1" max="65535"></label>
+        <label class="full">Fallback wallet address<input id="wallet_fallback_address" name="wallet_fallback_address" autocomplete="off"></label>
         <label class="full">Fallback pool password<input id="pool_fallback_password" name="pool_fallback_password" placeholder="unchanged"></label>
         <label class="full">Fallback suggested difficulty<input id="pool_fallback_suggest_difficulty" name="pool_fallback_suggest_difficulty" type="number" min="0" step="0.00001"></label>
+        <label class="full">Fallback submit floor<input id="pool_fallback_min_submit_difficulty" name="pool_fallback_min_submit_difficulty" type="number" min="0" step="0.00001"></label>
         <label>UDP broadcast sec<input id="udp_broadcast_sec" name="udp_broadcast_sec" type="number" min="0" max="255"></label>
         <label>API port<input id="api_port" name="api_port" type="number" min="1" max="65535"></label>
         <label class="toggle full"><input id="led_enabled" name="led_enabled" type="checkbox"> LED enabled</label>
@@ -73,6 +76,7 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
       <div class="row"><span class="label">SSID</span><span id="ssid">-</span></div>
       <div class="row"><span class="label">RSSI</span><span id="rssi">-</span></div>
       <div class="row"><span class="label">Active pool</span><span id="pool">-</span></div>
+      <div class="row"><span class="label">Active wallet</span><span id="activeWallet">-</span></div>
       <div class="row"><span class="label">Uptime</span><span id="uptime">0s</span></div>
       <div class="row"><span class="label">Free heap</span><span id="heap">-</span></div>
     </div>
@@ -82,27 +86,30 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
 <script>
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:1});
+const fmtHashrate=n=>{n=Number(n||0);if(n>=1e6)return (n/1e6).toLocaleString(undefined,{maximumFractionDigits:4})+' MH/s';if(n>=1e3)return (n/1e3).toLocaleString(undefined,{maximumFractionDigits:2})+' KH/s';return n.toLocaleString(undefined,{maximumFractionDigits:1})+' H/s';};
+const fmtAge=s=>{s=Number(s||0);if(s<=0)return 'never';if(s<60)return Math.floor(s)+'s ago';if(s<3600)return Math.floor(s/60)+'m '+Math.floor(s%60)+'s ago';return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m ago';};
 async function getJson(url){const r=await fetch(url);if(!r.ok)throw new Error(url);return r.json();}
 function setVal(id,v){const e=$(id);if(e)e.value=v??'';}
-function fillConfig(c){['wallet_address','worker_name','pool_primary_url','pool_primary_port','pool_primary_suggest_difficulty','pool_fallback_url','pool_fallback_port','pool_fallback_suggest_difficulty','udp_broadcast_sec','api_port'].forEach(k=>setVal(k,c[k]));$('led_enabled').checked=!!c.led_enabled;}
+function fillConfig(c){['wallet_address','wallet_fallback_address','worker_name','pool_primary_url','pool_primary_port','pool_primary_suggest_difficulty','pool_primary_min_submit_difficulty','pool_fallback_url','pool_fallback_port','pool_fallback_suggest_difficulty','pool_fallback_min_submit_difficulty','udp_broadcast_sec','api_port'].forEach(k=>setVal(k,c[k]));$('led_enabled').checked=!!c.led_enabled;}
 async function refresh(){
  try{
   const [status,mining,network,pool,info]=await Promise.all([getJson('/api/v1/status'),getJson('/api/v1/mining'),getJson('/api/v1/network'),getJson('/api/v1/pool'),getJson('/api/v1/info')]);
   $('version').textContent=info.version+' | '+info.compatible_with;
   $('wifiDot').className='dot '+(status.wifi_connected?'ok':'');
   $('wifiText').textContent=status.wifi_connected?'online':'offline';
-  $('hash1s').textContent=fmt(mining.hashrate_1s_hs);$('hash1m').textContent=fmt(mining.hashrate_1m_hs);
-  $('shares').textContent=(mining.shares_accepted||0)+' / '+(mining.shares_rejected||0);$('bestDiff').textContent=fmt(mining.best_difficulty);
+  $('hash1s').textContent=fmtHashrate(mining.hashrate_1s_hs);$('hash1m').textContent=fmtHashrate(mining.hashrate_1m_hs);
+  const accepted=mining.shares_accepted||0,rejected=mining.shares_rejected||0,submitted=mining.shares_submitted??(accepted+rejected);
+  $('sharesAccepted').textContent=accepted;$('sharesDetail').textContent=submitted+' submitted / '+rejected+' rejected';$('bestDiff').textContent=fmt(mining.best_difficulty);$('lastShare').textContent=fmtAge(mining.last_share_ago_seconds);
   $('ip').textContent=network.ip||'-';$('ssid').textContent=network.ssid||'-';$('rssi').textContent=(network.rssi||0)+' dBm';
-  $('pool').textContent=pool.connected?(pool.active_kind+' '+pool.active_url+':'+pool.active_port):'disconnected';$('uptime').textContent=(mining.uptime_seconds||0)+'s';$('heap').textContent=fmt(status.free_heap);
+  $('pool').textContent=pool.connected?(pool.active_kind+' '+pool.active_url+':'+pool.active_port):'disconnected';$('activeWallet').textContent=pool.active_wallet||'-';$('uptime').textContent=(mining.uptime_seconds||0)+'s';$('heap').textContent=fmt(status.free_heap);
  }catch(e){}
 }
 async function load(){fillConfig(await getJson('/api/v1/config'));refresh();}
 $('configForm').addEventListener('submit',async e=>{
  e.preventDefault();const f=e.currentTarget;const body={};
- ['wallet_address','worker_name','pool_primary_url','pool_fallback_url'].forEach(k=>body[k]=f[k].value.trim());
+ ['wallet_address','wallet_fallback_address','worker_name','pool_primary_url','pool_fallback_url'].forEach(k=>body[k]=f[k].value.trim());
  ['pool_primary_port','pool_fallback_port','udp_broadcast_sec','api_port'].forEach(k=>body[k]=Number(f[k].value));
- ['pool_primary_suggest_difficulty','pool_fallback_suggest_difficulty'].forEach(k=>body[k]=Number(f[k].value));
+ ['pool_primary_suggest_difficulty','pool_primary_min_submit_difficulty','pool_fallback_suggest_difficulty','pool_fallback_min_submit_difficulty'].forEach(k=>body[k]=Number(f[k].value));
  if(f.pool_primary_password.value.trim())body.pool_primary_password=f.pool_primary_password.value.trim();
  if(f.pool_fallback_password.value.trim())body.pool_fallback_password=f.pool_fallback_password.value.trim();
  body.led_enabled=f.led_enabled.checked;
@@ -240,11 +247,13 @@ void ApiServer::handleMining(AsyncWebServerRequest* req) {
     root["total_hashes"]      = s.hashCount.load();
     root["shares_accepted"]   = s.sharesAccepted.load();
     root["shares_rejected"]   = s.sharesRejected.load();
+    root["shares_submitted"]  = s.sharesAccepted.load() + s.sharesRejected.load();
     root["blocks_found"]      = s.blocksFound.load();
     root["best_difficulty"]   = s.bestDifficulty.load();
     root["session_best_diff"] = s.sessionBestDiff.load();
     root["uptime_seconds"]    = Stats::uptimeSeconds();
     root["last_share_ago_ms"] = s.lastShareMillis ? (millis() - s.lastShareMillis) : 0;
+    root["last_share_ago_seconds"] = s.lastShareMillis ? ((millis() - s.lastShareMillis) / 1000) : 0;
 
     res->setLength();
     req->send(res);
@@ -262,7 +271,10 @@ void ApiServer::handlePool(AsyncWebServerRequest* req) {
     fallback["url"]  = _cfg->poolFallbackUrl;
     fallback["port"] = _cfg->poolFallbackPort;
 
-    String fullWorker = _cfg->walletAddress;
+    String wallet = _activePoolKind == "fallback" && _cfg->walletFallbackAddress.length() > 0
+        ? _cfg->walletFallbackAddress
+        : _cfg->walletAddress;
+    String fullWorker = wallet;
     if (_cfg->workerName.length() > 0) {
         fullWorker += "." + _cfg->workerName;
     }
@@ -279,6 +291,8 @@ void ApiServer::handlePool(AsyncWebServerRequest* req) {
     root["stratumURL"]  = activePool;
     root["worker"]      = fullWorker;
     root["stratumUser"] = fullWorker;
+    root["active_wallet"] = wallet;
+    root["active_worker"] = fullWorker;
 
     res->setLength();
     req->send(res);
@@ -336,10 +350,13 @@ void ApiServer::handleConfigGet(AsyncWebServerRequest* req) {
     root["pool_primary_url"]   = _cfg->poolPrimaryUrl;
     root["pool_primary_port"]  = _cfg->poolPrimaryPort;
     root["pool_primary_suggest_difficulty"] = _cfg->poolPrimarySuggestDiff;
+    root["pool_primary_min_submit_difficulty"] = _cfg->poolPrimaryMinSubmitDiff;
     root["pool_fallback_url"]  = _cfg->poolFallbackUrl;
     root["pool_fallback_port"] = _cfg->poolFallbackPort;
     root["pool_fallback_suggest_difficulty"] = _cfg->poolFallbackSuggestDiff;
+    root["pool_fallback_min_submit_difficulty"] = _cfg->poolFallbackMinSubmitDiff;
     root["wallet_address"]     = _cfg->walletAddress;
+    root["wallet_fallback_address"] = _cfg->walletFallbackAddress;
     root["worker_name"]        = _cfg->workerName;
     root["wifi_ssid"]          = _cfg->wifiSsid;
     root["led_enabled"]        = _cfg->ledEnabled;
@@ -398,7 +415,10 @@ void ApiServer::handleCompatSystemInfo(AsyncWebServerRequest* req) {
     String activePool = _poolConnected && _activePoolUrl.length() > 0
         ? _activePoolUrl + ":" + String(_activePoolPort)
         : "";
-    String worker = _cfg->walletAddress;
+    String wallet = _activePoolKind == "fallback" && _cfg->walletFallbackAddress.length() > 0
+        ? _cfg->walletFallbackAddress
+        : _cfg->walletAddress;
+    String worker = wallet;
     if (_cfg->workerName.length() > 0) {
         worker += "." + _cfg->workerName;
     }
@@ -484,8 +504,23 @@ void ApiServer::handleConfigPost(AsyncWebServerRequest* req, JsonVariant& body) 
             _cfg->poolFallbackSuggestDiff = value; changed = true;
         }
     }
+    if (in["pool_primary_min_submit_difficulty"].is<double>() || in["pool_primary_min_submit_difficulty"].is<int>()) {
+        double value = in["pool_primary_min_submit_difficulty"].as<double>();
+        if (value >= 0.0) {
+            _cfg->poolPrimaryMinSubmitDiff = value; changed = true;
+        }
+    }
+    if (in["pool_fallback_min_submit_difficulty"].is<double>() || in["pool_fallback_min_submit_difficulty"].is<int>()) {
+        double value = in["pool_fallback_min_submit_difficulty"].as<double>();
+        if (value >= 0.0) {
+            _cfg->poolFallbackMinSubmitDiff = value; changed = true;
+        }
+    }
     if (in["wallet_address"].is<const char*>()) {
         _cfg->walletAddress = in["wallet_address"].as<String>(); changed = true;
+    }
+    if (in["wallet_fallback_address"].is<const char*>()) {
+        _cfg->walletFallbackAddress = in["wallet_fallback_address"].as<String>(); changed = true;
     }
     if (in["worker_name"].is<const char*>()) {
         _cfg->workerName = in["worker_name"].as<String>(); changed = true;

@@ -21,7 +21,7 @@ namespace WroomMiner {
 // The mining task builds the 80-byte block header from this.
 struct StratumJob {
     String   jobId;
-    uint8_t  prevHash[32];       // big-endian (as received from the pool)
+    uint8_t  prevHash[32];       // header byte order, as received from the pool
     String   coinbase1;          // hex
     String   coinbase2;          // hex
     String   merkleBranches[16]; // hex strings
@@ -85,6 +85,8 @@ public:
 private:
     bool sendJson(const String& json);
     bool suggestDifficulty();
+    void trackSubmitId(uint32_t id);
+    bool consumeSubmitId(uint32_t id);
     void processLine(const String& line);
     void handleNotify(JsonArrayConst params);
     void handleSetDifficulty(JsonArrayConst params);
@@ -99,7 +101,8 @@ private:
     uint32_t      _subscribeId = 0;
     uint32_t      _suggestDifficultyId = 0;
     uint32_t      _authorizeId = 0;
-    uint32_t      _pendingSubmitId = 0;
+    uint32_t      _pendingSubmitIds[8] = {0};
+    uint8_t       _pendingSubmitNext = 0;
     uint32_t      _lastSuggestDifficultyMs = 0;
     double        _suggestedDifficulty = 0.0;
     double        _currentDifficulty = 1.0;

@@ -3,10 +3,12 @@
 // ============================================================
 #include "stratum.h"
 #include <WiFi.h>
+#include <cstring>
 
 namespace WroomMiner {
 
 static constexpr uint32_t kSuggestDifficultyKeepaliveMs = 30000;
+static constexpr uint32_t kSubscribeTimeoutMs = 10000;
 
 // Helper: hex string -> bytes
 static void hexToBytes(const char* hex, uint8_t* out, size_t outLen) {
@@ -74,7 +76,7 @@ bool StratumClient::connect(const String& host, uint16_t port,
     }
 
     // Wait for the subscribe response (extranonce1, extranonce2_size)
-    uint32_t deadline = millis() + 5000;
+    uint32_t deadline = millis() + kSubscribeTimeoutMs;
     while (millis() < deadline && _currentJob.extranonce1.length() == 0) {
         loop();
         delay(10);
@@ -127,7 +129,8 @@ void StratumClient::disconnect() {
     _subscribeId = 0;
     _suggestDifficultyId = 0;
     _authorizeId = 0;
-    _pendingSubmitId = 0;
+    memset(_pendingSubmitIds, 0, sizeof(_pendingSubmitIds));
+    _pendingSubmitNext = 0;
     _lastSuggestDifficultyMs = 0;
     _suggestedDifficulty = 0.0;
 }
@@ -150,6 +153,27 @@ bool StratumClient::suggestDifficulty() {
 
     _lastSuggestDifficultyMs = millis();
     return true;
+}
+
+void StratumClient::trackSubmitId(uint32_t id) {
+    for (uint8_t i = 0; i < 8; ++i) {
+        if (_pendingSubmitIds[i] == 0) {
+            _pendingSubmitIds[i] = id;
+            return;
+        }
+    }
+    _pendingSubmitIds[_pendingSubmitNext] = id;
+    _pendingSubmitNext = (_pendingSubmitNext + 1) % 8;
+}
+
+bool StratumClient::consumeSubmitId(uint32_t id) {
+    for (uint8_t i = 0; i < 8; ++i) {
+        if (_pendingSubmitIds[i] == id) {
+            _pendingSubmitIds[i] = 0;
+            return true;
+        }
+    }
+    return false;
 }
 
 void StratumClient::loop() {
@@ -238,9 +262,13 @@ void StratumClient::processLine(const String& line) {
             }
         }
         // Submit response
-        else if (id == _pendingSubmitId && (doc["result"].is<bool>() || !doc["error"].isNull())) {
-            _pendingSubmitId = 0;
+        else if (consumeSubmitId(id) && (doc["result"].is<bool>() || !doc["error"].isNull())) {
             handleSubmitResponse(doc["id"], doc["result"], doc["error"]);
+        } else {
+            Serial.printf("Unhandled response id=%lu result=%s error=%s\r\n",
+                          static_cast<unsigned long>(id),
+                          doc["result"].as<String>().c_str(),
+                          doc["error"].as<String>().c_str());
         }
     }
 }
@@ -294,9 +322,11 @@ void StratumClient::handleSubmitResponse(JsonVariantConst /*id*/,
                                          JsonVariantConst result,
                                          JsonVariantConst error) {
     bool accepted = result.is<bool>() && result.as<bool>();
-    if (!accepted && !error.isNull()) {
-        log_w("Stratum: share rejected: %s", error.as<String>().c_str());
-    } else if (accepted) {
+    if (!accepted) {
+        String reason = !error.isNull() ? error.as<String>() : "unknown";
+        Serial.printf("SHARE REJECTED  reason=%s\r\n", reason.c_str());
+        log_w("Stratum: share rejected: %s", reason.c_str());
+    } else {
         log_i("Stratum: share accepted (diff=%.6f)", _currentDifficulty);
     }
     if (_submitCb) _submitCb(accepted, _currentDifficulty);
@@ -307,19 +337,20 @@ bool StratumClient::submitShare(const String& jobId,
                                 uint32_t nTime,
                                 uint32_t nonce) {
     char buf[256];
-    _pendingSubmitId = _msgId++;
-    // Stratum expects nTime and nonce as big-endian hex strings, matching the
-    // byte order that the pool originally sent them in (and that the pool's
-    // verifier will reconstruct). nTime is stored as a native uint32 parsed
-    // from the pool's big-endian hex, so %08x gives the correct big-endian
-    // representation. nonce is iterated as a native uint32 written
-    // little-endian into the header bytes, and Stratum submit also expects
-    // it as a little-endian hex string — so %08x is correct for both.
+    uint32_t submitId = _msgId++;
+    trackSubmitId(submitId);
+    // Stratum submit byte-order rules:
+    //   nTime : submitted as the same big-endian hex the pool sent in notify
+    //           (we parsed it with strtoul, so %08x reproduces the original)
+    //   nonce : submitted as the 4 serialized header bytes. The mining loop
+    //           writes the native nonce little-endian, so bswap32 prints those
+    //           bytes in the same order as the debug header.
     snprintf(buf, sizeof(buf),
              "{\"id\":%u,\"method\":\"mining.submit\",\"params\":"
              "[\"%s\",\"%s\",\"%s\",\"%08x\",\"%08x\"]}\n",
-             _pendingSubmitId, _authorizedWorker.c_str(), jobId.c_str(), extranonce2.c_str(),
-             nTime, nonce);
+             submitId, _authorizedWorker.c_str(), jobId.c_str(), extranonce2.c_str(),
+             nTime, __builtin_bswap32(nonce));
+    Serial.printf("Submit payload: %s", buf);
     return sendJson(String(buf));
 }
 

@@ -21,6 +21,12 @@ public:
     static bool isConnected();
     static String localIp();
     static int rssi();
+
+    // Keeps STA mode stable after boot: reconnects if the AP drops us.
+    static void maintain();
+
+private:
+    static void applyRadioTuning();
 };
 
 } // namespace WroomMiner

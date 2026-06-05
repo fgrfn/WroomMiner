@@ -60,11 +60,13 @@ Detailed mining statistics.
   "total_hashes": 1532000000,
   "shares_accepted": 8,
   "shares_rejected": 0,
+  "shares_submitted": 8,
   "blocks_found": 0,
   "best_difficulty": 0.12345,
   "session_best_diff": 0.05432,
   "uptime_seconds": 3712,
-  "last_share_ago_ms": 142000
+  "last_share_ago_ms": 142000,
+  "last_share_ago_seconds": 142
 }
 ```
 
@@ -89,7 +91,9 @@ Pool configuration and active status.
   "active_url": "solo.ckpool.org",
   "active_port": 3333,
   "connected": true,
-  "worker": "wroom01"
+  "worker": "bc1q....wroom01",
+  "active_wallet": "bc1q...",
+  "active_worker": "bc1q....wroom01"
 }
 ```
 
@@ -149,10 +153,13 @@ Current configuration (pool passwords are **not** returned).
   "pool_primary_url": "public-pool.io",
   "pool_primary_port": 21496,
   "pool_primary_suggest_difficulty": 0.00015,
+  "pool_primary_min_submit_difficulty": 0.001,
   "pool_fallback_url": "solo.ckpool.org",
   "pool_fallback_port": 3333,
   "pool_fallback_suggest_difficulty": 0.00015,
+  "pool_fallback_min_submit_difficulty": 0.001,
   "wallet_address": "bc1q...",
+  "wallet_fallback_address": "bc1q...",
   "worker_name": "wroom01",
   "wifi_ssid": "MyWifi",
   "led_enabled": true,
@@ -173,8 +180,10 @@ Change configuration. Only the provided fields are updated. A restart is usually
   "pool_primary_url": "pool.nerdminers.org",
   "pool_primary_port": 3333,
   "pool_primary_suggest_difficulty": 0.00015,
+  "pool_primary_min_submit_difficulty": 0.001,
   "pool_primary_password": "x",
   "pool_fallback_password": "x",
+  "wallet_fallback_address": "bc1q...",
   "worker_name": "wroom02"
 }
 ```

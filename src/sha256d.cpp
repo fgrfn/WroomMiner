@@ -79,7 +79,7 @@ Sha256dBackend sha256d_backend() {
 const char* sha256d_backend_name() {
     return g_backend == Sha256dBackend::HardwareMidstate
         ? "ESP32 HW midstate"
-        : "software midstate";
+        : "fast SW midstate";
 }
 
 bool sha256d_try_enable_hardware_midstate(const Sha256Midstate& midstate,

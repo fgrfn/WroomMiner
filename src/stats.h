@@ -8,8 +8,8 @@
 
 namespace WroomMiner {
 
-// Thread-safe mining statistics. Written by the mining task
-// (Core 1) and read by the API server (Core 0).
+// Thread-safe mining statistics. Written by mining workers and read by
+// the API server/status loop.
 struct MiningStats {
     // --- Live counters (atomic for cross-core access) ---
     std::atomic<uint64_t> hashCount{0};        // hashes since last reset

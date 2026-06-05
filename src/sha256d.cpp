@@ -112,11 +112,10 @@ static inline void IRAM_ATTR sha_hw_wait_idle() {
 static inline void IRAM_ATTR sha_hw_write_second_header_block(const uint8_t* tail,
                                                               uint32_t nonce) {
     volatile uint32_t* reg = reinterpret_cast<volatile uint32_t*>(SHA_TEXT_BASE);
-    const uint32_t* words = reinterpret_cast<const uint32_t*>(tail);
 
-    reg[0] = words[0];
-    reg[1] = words[1];
-    reg[2] = words[2];
+    reg[0] = GET_BE(tail, 0);
+    reg[1] = GET_BE(tail, 4);
+    reg[2] = GET_BE(tail, 8);
     reg[3] = __builtin_bswap32(nonce);
     reg[4] = 0x80000000u;
     reg[5] = 0;

@@ -181,24 +181,32 @@ void MiningEngine::start(StratumClient* stratum) {
     _stratum = stratum;
     _running = true;
 
-    // Pin the mining task to Core 1 (APP_CPU).
-    // Core 0 (PRO_CPU) stays free for WiFi, HTTP, Stratum.
-    xTaskCreatePinnedToCore(
-        taskTrampoline,
-        "mining",
-        MINING_TASK_STACK,
-        this,
-        MINING_TASK_PRIORITY,
-        &_taskHandle,
-        1 // Core 1
-    );
+    uint8_t workerCount = sha256d_backend() == Sha256dBackend::HardwareMidstate
+        ? 1
+        : WORKER_COUNT;
+    Serial.printf("Mining workers: %u\r\n", workerCount);
+
+    for (uint8_t i = 0; i < workerCount; ++i) {
+        _workerContexts[i] = { this, i };
+        char taskName[12];
+        snprintf(taskName, sizeof(taskName), "mining%u", i);
+        xTaskCreatePinnedToCore(
+            taskTrampoline,
+            taskName,
+            MINING_TASK_STACK,
+            &_workerContexts[i],
+            MINING_TASK_PRIORITY,
+            &_taskHandles[i],
+            i == 0 ? 1 : 0
+        );
+    }
 }
 
 void MiningEngine::stop() {
     _running = false;
-    if (_taskHandle) {
-        // The task terminates itself via _running = false
-        _taskHandle = nullptr;
+    for (auto& handle : _taskHandles) {
+        // The tasks terminate themselves via _running = false
+        handle = nullptr;
     }
 }
 
@@ -227,7 +235,8 @@ void MiningEngine::setMinimumShareDifficulty(double difficulty) {
 }
 
 void MiningEngine::taskTrampoline(void* arg) {
-    static_cast<MiningEngine*>(arg)->taskLoop();
+    auto* ctx = static_cast<WorkerContext*>(arg);
+    ctx->engine->taskLoop(ctx->workerId);
     vTaskDelete(nullptr);
 }
 
@@ -306,8 +315,11 @@ void MiningEngine::buildHeader(const StratumJob& job,
     header80[79] = 0;
 }
 
-void MiningEngine::taskLoop() {
-    log_i("Mining task started on core %d", xPortGetCoreID());
+void MiningEngine::taskLoop(uint8_t workerId) {
+    log_i("Mining worker %u started on core %d", workerId, xPortGetCoreID());
+    const uint32_t nonceStride = sha256d_backend() == Sha256dBackend::HardwareMidstate
+        ? 1
+        : WORKER_COUNT;
 
     uint8_t        header[80];
     uint8_t        hash[32];
@@ -321,7 +333,7 @@ void MiningEngine::taskLoop() {
     while (_running) {
         // Wait for the first job
         if (!_activeJob.valid) {
-            if (!waitingForJobLogged) {
+            if (workerId == 0 && !waitingForJobLogged) {
                 Serial.println("Waiting for first mining job from pool...");
                 waitingForJobLogged = true;
             }
@@ -333,7 +345,7 @@ void MiningEngine::taskLoop() {
         if (localEpoch != _jobEpoch) {
             localEpoch = _jobEpoch;
             extranonce2 = 0;
-            nonce = 0;
+            nonce = workerId;
             buildHeader(_activeJob, extranonce2, header);
             sha256d_prepare_midstate(header, midstate);
             double effectiveDifficulty = _activeJob.difficulty;
@@ -342,12 +354,14 @@ void MiningEngine::taskLoop() {
             }
             targetForDifficulty(effectiveDifficulty, shareTarget);
             waitingForJobLogged = false;
-            Serial.printf("Job [%s] diff=%.6f submit>=%.6f branches=%u en2=%u\r\n",
-                          _activeJob.jobId.c_str(),
-                          _activeJob.difficulty,
-                          effectiveDifficulty,
-                          _activeJob.merkleCount,
-                          _activeJob.extranonce2Size);
+            if (workerId == 0) {
+                Serial.printf("Job [%s] diff=%.6f submit>=%.6f branches=%u en2=%u\r\n",
+                              _activeJob.jobId.c_str(),
+                              _activeJob.difficulty,
+                              effectiveDifficulty,
+                              _activeJob.merkleCount,
+                              _activeJob.extranonce2Size);
+            }
         }
 
         // --- Hash a batch of nonces ---
@@ -394,13 +408,16 @@ void MiningEngine::taskLoop() {
                 }
             }
 
-            nonce++;
+            uint32_t nextNonce = nonce + nonceStride;
 
             // When the nonce range is exhausted, advance extranonce2
-            if (nonce == 0) {
+            if (nextNonce < nonce) {
                 extranonce2++;
                 buildHeader(_activeJob, extranonce2, header);
                 sha256d_prepare_midstate(header, midstate);
+                nonce = workerId;
+            } else {
+                nonce = nextNonce;
             }
         }
 
@@ -418,7 +435,7 @@ void MiningEngine::taskLoop() {
         vTaskDelay(1);
     }
 
-    log_i("Mining task exiting");
+    log_i("Mining worker %u exiting", workerId);
 }
 
 } // namespace WroomMiner

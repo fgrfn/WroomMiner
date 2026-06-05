@@ -1,5 +1,5 @@
 // ============================================================
-//  mining.h - Mining task (runs on Core 1)
+//  mining.h - Mining workers
 //
 //  Iterates over nonces, computes SHA256d, checks the target.
 //  When a share is found, it is submitted to the pool via the
@@ -15,7 +15,7 @@ class MiningEngine {
 public:
     MiningEngine();
 
-    // Starts the mining task pinned to Core 1.
+    // Starts the mining workers.
     void start(StratumClient* stratum);
 
     void stop();
@@ -33,8 +33,15 @@ public:
     bool isRunning() const { return _running; }
 
 private:
+    static constexpr uint8_t WORKER_COUNT = 2;
+
+    struct WorkerContext {
+        MiningEngine* engine;
+        uint8_t workerId;
+    };
+
     static void taskTrampoline(void* arg);
-    void taskLoop();
+    void taskLoop(uint8_t workerId);
 
     // Builds the 80-byte block header from the Stratum job.
     // Writes 'extranonce2' (4-byte incrementing counter).
@@ -43,7 +50,8 @@ private:
                      uint8_t* header80);
 
     StratumClient*       _stratum = nullptr;
-    TaskHandle_t         _taskHandle = nullptr;
+    TaskHandle_t         _taskHandles[WORKER_COUNT] = {};
+    WorkerContext        _workerContexts[WORKER_COUNT] = {};
     volatile bool        _running = false;
 
     // Current job (copied from Stratum, lock-free via epoch counter)

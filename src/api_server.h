@@ -1,8 +1,7 @@
 // ============================================================
 //  api_server.h - REST API + WebSocket
 //
-//  Serves all /api/v1/* endpoints and /ws.
-//  Optimized for HashHive integration.
+//  Serves all /api/* endpoints and /ws.
 // ============================================================
 #pragma once
 
@@ -41,8 +40,7 @@ private:
     void handleConfigGet (AsyncWebServerRequest* req);
     void handleStats     (AsyncWebServerRequest* req);
     void handleInfo      (AsyncWebServerRequest* req);
-    void handleCompatProbe     (AsyncWebServerRequest* req);
-    void handleCompatSystemInfo(AsyncWebServerRequest* req);
+    void handleProbe           (AsyncWebServerRequest* req);
 
     // --- POST handlers ---
     void handleConfigPost (AsyncWebServerRequest* req, JsonVariant& body);

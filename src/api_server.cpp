@@ -2,6 +2,7 @@
 //  api_server.cpp - REST API + WebSocket implementation
 // ============================================================
 #include "api_server.h"
+#include "sha256d.h"
 #include "stats.h"
 #include <WiFi.h>
 #include <esp_system.h>
@@ -93,7 +94,7 @@ function setVal(id,v){const e=$(id);if(e)e.value=v??'';}
 function fillConfig(c){['wallet_address','wallet_fallback_address','worker_name','pool_primary_url','pool_primary_port','pool_primary_suggest_difficulty','pool_primary_min_submit_difficulty','pool_fallback_url','pool_fallback_port','pool_fallback_suggest_difficulty','pool_fallback_min_submit_difficulty','udp_broadcast_sec','api_port'].forEach(k=>setVal(k,c[k]));$('led_enabled').checked=!!c.led_enabled;}
 async function refresh(){
  try{
-  const [status,mining,network,pool,info]=await Promise.all([getJson('/api/v1/status'),getJson('/api/v1/mining'),getJson('/api/v1/network'),getJson('/api/v1/pool'),getJson('/api/v1/info')]);
+  const [status,mining,network,pool,info]=await Promise.all([getJson('/api/status'),getJson('/api/mining'),getJson('/api/network'),getJson('/api/pool'),getJson('/api/info')]);
   $('version').textContent=info.version+' | '+info.compatible_with;
   $('wifiDot').className='dot '+(status.wifi_connected?'ok':'');
   $('wifiText').textContent=status.wifi_connected?'online':'offline';
@@ -104,7 +105,7 @@ async function refresh(){
   $('pool').textContent=pool.connected?(pool.active_kind+' '+pool.active_url+':'+pool.active_port):'disconnected';$('activeWallet').textContent=pool.active_wallet||'-';$('uptime').textContent=(mining.uptime_seconds||0)+'s';$('heap').textContent=fmt(status.free_heap);
  }catch(e){}
 }
-async function load(){fillConfig(await getJson('/api/v1/config'));refresh();}
+async function load(){fillConfig(await getJson('/api/config'));refresh();}
 $('configForm').addEventListener('submit',async e=>{
  e.preventDefault();const f=e.currentTarget;const body={};
  ['wallet_address','wallet_fallback_address','worker_name','pool_primary_url','pool_fallback_url'].forEach(k=>body[k]=f[k].value.trim());
@@ -113,15 +114,15 @@ $('configForm').addEventListener('submit',async e=>{
  if(f.pool_primary_password.value.trim())body.pool_primary_password=f.pool_primary_password.value.trim();
  if(f.pool_fallback_password.value.trim())body.pool_fallback_password=f.pool_fallback_password.value.trim();
  body.led_enabled=f.led_enabled.checked;
- const r=await fetch('/api/v1/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  $('formStatus').textContent=r.ok?'Saved. Restart required.':'Save failed.';
 });
-$('restartBtn').onclick=()=>fetch('/api/v1/action/restart',{method:'POST'});
-$('resetBtn').onclick=()=>{if(confirm('Factory reset?'))fetch('/api/v1/action/reset',{method:'POST'});};
+$('restartBtn').onclick=()=>fetch('/api/system/restart',{method:'POST'});
+$('resetBtn').onclick=()=>{if(confirm('Factory reset?'))fetch('/api/system/reset',{method:'POST'});};
 $('otaBtn').onclick=async()=>{
  const file=$('otaFile').files[0];if(!file){$('otaStatus').textContent='Select a firmware .bin first.';return;}
  const body=new FormData();body.append('firmware',file,file.name);$('otaStatus').textContent='Uploading...';
- const r=await fetch('/api/v1/ota',{method:'POST',body});$('otaStatus').textContent=r.ok?'Uploaded. Restarting...':'OTA failed.';
+ const r=await fetch('/api/ota',{method:'POST',body});$('otaStatus').textContent=r.ok?'Uploaded. Restarting...':'OTA failed.';
 };
 load();setInterval(refresh,1000);
 </script>
@@ -177,36 +178,48 @@ void ApiServer::setupRoutes() {
         req->send(200, "text/html", INDEX_HTML);
     });
 
-    // --- HashHive / NMMiner-compatible discovery endpoints ---
-    _server->on("/probe", HTTP_GET, [this](AsyncWebServerRequest* r){ handleCompatProbe(r); });
-    _server->on("/api/system/info", HTTP_GET, [this](AsyncWebServerRequest* r){ handleCompatSystemInfo(r); });
-    _server->on("/api/system/restart", HTTP_POST, [this](AsyncWebServerRequest* r){ handleRestart(r); });
+    // --- Discovery ---
+    _server->on("/api/probe", HTTP_GET, [this](AsyncWebServerRequest* r){ handleProbe(r); });
 
     // --- GET endpoints ---
-    _server->on("/api/v1/status",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleStatus(r); });
-    _server->on("/api/v1/mining",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleMining(r); });
-    _server->on("/api/v1/pool",    HTTP_GET, [this](AsyncWebServerRequest* r){ handlePool(r); });
-    _server->on("/api/v1/network", HTTP_GET, [this](AsyncWebServerRequest* r){ handleNetwork(r); });
-    _server->on("/api/v1/system",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleSystem(r); });
-    _server->on("/api/v1/config",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleConfigGet(r); });
-    _server->on("/api/v1/stats",   HTTP_GET, [this](AsyncWebServerRequest* r){ handleStats(r); });
-    _server->on("/api/v1/info",    HTTP_GET, [this](AsyncWebServerRequest* r){ handleInfo(r); });
+    _server->on("/api/status",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleStatus(r); });
+    _server->on("/api/mining",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleMining(r); });
+    _server->on("/api/pool",    HTTP_GET, [this](AsyncWebServerRequest* r){ handlePool(r); });
+    _server->on("/api/network", HTTP_GET, [this](AsyncWebServerRequest* r){ handleNetwork(r); });
+    _server->on("/api/system",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleSystem(r); });
+    _server->on("/api/config",  HTTP_GET, [this](AsyncWebServerRequest* r){ handleConfigGet(r); });
+    _server->on("/api/stats",   HTTP_GET, [this](AsyncWebServerRequest* r){ handleStats(r); });
+    _server->on("/api/info",    HTTP_GET, [this](AsyncWebServerRequest* r){ handleInfo(r); });
 
     // --- POST endpoints ---
-    auto* configPost = new AsyncCallbackJsonWebHandler("/api/v1/config",
+    auto* configPost = new AsyncCallbackJsonWebHandler("/api/config",
         [this](AsyncWebServerRequest* r, JsonVariant& body) { handleConfigPost(r, body); });
     _server->addHandler(configPost);
 
-    _server->on("/api/v1/action/restart", HTTP_POST,
+    _server->on("/api/system/restart", HTTP_POST,
                 [this](AsyncWebServerRequest* r){ handleRestart(r); });
-    _server->on("/api/v1/action/reset",   HTTP_POST,
+    _server->on("/api/system/reset",   HTTP_POST,
                 [this](AsyncWebServerRequest* r){ handleFactoryReset(r); });
-    _server->on("/api/v1/ota", HTTP_POST,
+    _server->on("/api/ota", HTTP_POST,
                 [this](AsyncWebServerRequest* r){ handleOtaPost(r); },
                 [this](AsyncWebServerRequest* r, const String& filename,
                        size_t index, uint8_t* data, size_t len, bool final) {
                     handleOtaUpload(r, filename, index, data, len, final);
                 });
+
+    // --- Legacy /api/v1/* redirects (301) ---
+    _server->on("/api/v1/status",         HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/status"); });
+    _server->on("/api/v1/mining",         HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/mining"); });
+    _server->on("/api/v1/pool",           HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/pool"); });
+    _server->on("/api/v1/network",        HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/network"); });
+    _server->on("/api/v1/system",         HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/system"); });
+    _server->on("/api/v1/config",         HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/config"); });
+    _server->on("/api/v1/stats",          HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/stats"); });
+    _server->on("/api/v1/info",           HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/info"); });
+    _server->on("/probe",                 HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/probe"); });
+    _server->on("/api/system/info",       HTTP_GET, [](AsyncWebServerRequest* r){ r->redirect("/api/system"); });
+    _server->on("/api/v1/action/restart", HTTP_POST,[this](AsyncWebServerRequest* r){ handleRestart(r); });
+    _server->on("/api/v1/action/reset",   HTTP_POST,[this](AsyncWebServerRequest* r){ handleFactoryReset(r); });
 
     // 404
     _server->onNotFound([](AsyncWebServerRequest* req) {
@@ -282,17 +295,12 @@ void ApiServer::handlePool(AsyncWebServerRequest* req) {
         ? _activePoolUrl + ":" + String(_activePoolPort)
         : "";
 
-    root["active"]      = _activePoolKind;
-    root["active_kind"] = _activePoolKind;
-    root["active_url"]  = _activePoolUrl;
-    root["active_port"] = _activePoolPort;
-    root["connected"]   = _poolConnected;
-    root["pool"]        = activePool;
-    root["stratumURL"]  = activePool;
-    root["worker"]      = fullWorker;
-    root["stratumUser"] = fullWorker;
+    root["active"]        = _activePoolKind;
+    root["active_url"]    = _activePoolUrl;
+    root["active_port"]   = _activePoolPort;
+    root["connected"]     = _poolConnected;
+    root["worker"]        = fullWorker;
     root["active_wallet"] = wallet;
-    root["active_worker"] = fullWorker;
 
     res->setLength();
     req->send(res);
@@ -377,92 +385,31 @@ void ApiServer::handleInfo(AsyncWebServerRequest* req) {
     AsyncJsonResponse* res = new AsyncJsonResponse();
     JsonObject root = res->getRoot().to<JsonObject>();
 
-    root["name"]            = WROOMMINER_NAME;
+    root["firmware"]        = WROOMMINER_NAME;
     root["version"]         = WROOMMINER_VERSION;
     root["build_date"]      = __DATE__ " " __TIME__;
-    root["api_version"]     = "v1";
-    root["compatible_with"] = "HashHive";
-    root["_type"]           = "wroomminer";
+    root["api_version"]     = "1";
+    root["sha256d_backend"] = sha256d_backend_name();
 
     res->setLength();
     req->send(res);
 }
 
-void ApiServer::handleCompatProbe(AsyncWebServerRequest* req) {
+void ApiServer::handleProbe(AsyncWebServerRequest* req) {
     AsyncJsonResponse* res = new AsyncJsonResponse();
     JsonObject root = res->getRoot().to<JsonObject>();
 
     auto& s = Stats::get();
-    root["model"]    = WROOMMINER_NAME;
-    root["hostname"] = WiFi.getHostname();
-    root["ver"]      = WROOMMINER_VERSION;
-    root["hr"]       = s.hashrate1s.load();
-    root["sbd"]      = s.sessionBestDiff.load();
-    root["ebd"]      = s.bestDifficulty.load();
-    root["ut"]       = Stats::uptimeSeconds();
-    root["mac"]      = WiFi.macAddress();
-    root["api"]      = "wroomminer";
-
-    res->setLength();
-    req->send(res);
-}
-
-void ApiServer::handleCompatSystemInfo(AsyncWebServerRequest* req) {
-    AsyncJsonResponse* res = new AsyncJsonResponse();
-    JsonObject root = res->getRoot().to<JsonObject>();
-
-    auto& s = Stats::get();
-    String activePool = _poolConnected && _activePoolUrl.length() > 0
-        ? _activePoolUrl + ":" + String(_activePoolPort)
-        : "";
-    String wallet = _activePoolKind == "fallback" && _cfg->walletFallbackAddress.length() > 0
-        ? _cfg->walletFallbackAddress
-        : _cfg->walletAddress;
-    String worker = wallet;
-    if (_cfg->workerName.length() > 0) {
-        worker += "." + _cfg->workerName;
-    }
-
-    JsonObject identity = root["identity"].to<JsonObject>();
-    identity["model"]     = WROOMMINER_NAME;
-    identity["hostName"]  = WiFi.getHostname();
-    identity["fwVersion"] = WROOMMINER_VERSION;
-    identity["mac"]       = WiFi.macAddress();
-    identity["rssi"]      = WiFi.RSSI();
-    identity["ip"]        = WiFi.localIP().toString();
-
-    JsonObject miner = root["miner"].to<JsonObject>();
-    miner["hashRate"]      = s.hashrate1s.load();
-    miner["hashRateUnit"]  = "H/s";
-    miner["hashRateHs"]    = s.hashrate1s.load();
-    miner["hashRate1mHs"]  = s.hashrate1m.load();
-    miner["uptimeSeconds"] = Stats::uptimeSeconds();
-    miner["bestDiffEver"]  = s.bestDifficulty.load();
-    miner["lastDiff"]      = s.sessionBestDiff.load();
-    miner["sAccepted"]     = s.sharesAccepted.load();
-    miner["sRejected"]     = s.sharesRejected.load();
-    miner["blocksFound"]   = s.blocksFound.load();
-
-    JsonObject stratum = root["stratum"].to<JsonObject>();
-    stratum["url"]       = activePool;
-    stratum["user"]      = worker;
-    stratum["connected"] = _poolConnected;
-    stratum["active"]    = _activePoolKind;
-
-    JsonObject temps = root["temps"].to<JsonObject>();
-    temps["asic"]  = nullptr;
-    temps["vcore"] = nullptr;
-
-    JsonObject storage = root["storage"].to<JsonObject>();
-    storage["freeHeap"]      = ESP.getFreeHeap();
-    storage["minFreeHeap"]   = ESP.getMinFreeHeap();
-    storage["flashSize"]     = ESP.getFlashChipSize();
-    storage["sketchSize"]    = ESP.getSketchSize();
-    storage["sketchFree"]    = ESP.getFreeSketchSpace();
-
-    root["compatible_with"] = "HashHive";
-    root["_type"]           = "wroomminer";
-    root["api"]             = "wroomminer";
+    root["firmware"]        = WROOMMINER_NAME;
+    root["version"]         = WROOMMINER_VERSION;
+    root["hostname"]        = WiFi.getHostname();
+    root["mac"]             = WiFi.macAddress();
+    root["ip"]              = WiFi.localIP().toString();
+    root["uptime_seconds"]  = Stats::uptimeSeconds();
+    root["hashrate_hs"]     = s.hashrate1s.load();
+    root["hashrate_1m_hs"]  = s.hashrate1m.load();
+    root["shares_accepted"] = s.sharesAccepted.load();
+    root["best_difficulty"] = s.bestDifficulty.load();
 
     res->setLength();
     req->send(res);

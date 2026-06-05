@@ -2,34 +2,55 @@
 
 Complete reference for all HTTP endpoints. Base URL: `http://<miner-ip>` (default port 80).
 
-All responses are JSON. Hashrates are in **H/s** (hashes per second), times in **milliseconds** unless noted otherwise.
+All responses are JSON. Hashrates are in **H/s** (hashes per second), times in **seconds** unless noted otherwise. All field names are `snake_case`.
 
 ---
 
 ## Overview
 
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/api/v1/status` | GET | — | Compact system overview |
-| `/api/v1/mining` | GET | — | Detailed mining stats |
-| `/api/v1/pool` | GET | — | Pool configuration & status |
-| `/api/v1/network` | GET | — | WiFi details |
-| `/api/v1/system` | GET | — | Hardware info |
-| `/api/v1/config` | GET | — | Current configuration (no secrets) |
-| `/api/v1/config` | POST | — | Change configuration |
-| `/api/v1/stats` | GET | — | Extended statistics |
-| `/api/v1/info` | GET | — | Firmware info |
-| `/api/v1/action/restart` | POST | — | Reboot |
-| `/api/v1/action/reset` | POST | — | Factory reset |
-| `/api/v1/ota` | POST | — | OTA firmware update |
-| `/probe` | GET | — | HashHive/NMMiner-compatible discovery probe |
-| `/api/system/info` | GET | — | HashHive/NMMiner-compatible status snapshot |
-| `/api/system/restart` | POST | — | HashHive/NMMiner-compatible restart |
-| `/ws` | WS | — | WebSocket livestream |
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/probe` | GET | Compact discovery snapshot |
+| `/api/status` | GET | System overview for dashboard cards |
+| `/api/mining` | GET | Detailed mining statistics |
+| `/api/pool` | GET | Pool configuration & connection state |
+| `/api/network` | GET | WiFi details |
+| `/api/system` | GET | Hardware info |
+| `/api/config` | GET | Current configuration (no secrets) |
+| `/api/config` | POST | Change configuration |
+| `/api/stats` | GET | Extended statistics |
+| `/api/info` | GET | Firmware info |
+| `/api/system/restart` | POST | Soft reboot |
+| `/api/system/reset` | POST | Factory reset (clears NVS) |
+| `/api/ota` | POST | OTA firmware update |
+| `/ws` | WS | WebSocket livestream |
+
+Legacy `/api/v1/*` paths redirect (301) to the canonical paths above.
 
 ---
 
-## GET `/api/v1/status`
+## GET `/api/probe`
+
+Compact snapshot for LAN discovery and health checks.
+
+```json
+{
+  "firmware": "WroomMiner",
+  "version": "0.1.0",
+  "hostname": "wroomminer",
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "ip": "192.168.1.123",
+  "uptime_seconds": 3712,
+  "hashrate_hs": 412000.5,
+  "hashrate_1m_hs": 411500.0,
+  "shares_accepted": 8,
+  "best_difficulty": 0.12345
+}
+```
+
+---
+
+## GET `/api/status`
 
 Compact overview for dashboard cards.
 
@@ -49,7 +70,7 @@ Compact overview for dashboard cards.
 
 ---
 
-## GET `/api/v1/mining`
+## GET `/api/mining`
 
 Detailed mining statistics.
 
@@ -72,9 +93,9 @@ Detailed mining statistics.
 
 ---
 
-## GET `/api/v1/pool`
+## GET `/api/pool`
 
-Pool configuration and active status.
+Pool configuration and active connection state.
 
 ```json
 {
@@ -87,19 +108,17 @@ Pool configuration and active status.
     "port": 3333
   },
   "active": "fallback",
-  "active_kind": "fallback",
   "active_url": "solo.ckpool.org",
   "active_port": 3333,
   "connected": true,
   "worker": "bc1q....wroom01",
-  "active_wallet": "bc1q...",
-  "active_worker": "bc1q....wroom01"
+  "active_wallet": "bc1q..."
 }
 ```
 
 ---
 
-## GET `/api/v1/network`
+## GET `/api/network`
 
 WiFi connection details.
 
@@ -118,9 +137,9 @@ WiFi connection details.
 
 ---
 
-## GET `/api/v1/system`
+## GET `/api/system`
 
-Hardware info.
+Hardware and runtime info.
 
 ```json
 {
@@ -144,9 +163,9 @@ Hardware info.
 
 ---
 
-## GET `/api/v1/config`
+## GET `/api/config`
 
-Current configuration (pool passwords are **not** returned).
+Current configuration. Pool passwords are **not** returned.
 
 ```json
 {
@@ -170,9 +189,9 @@ Current configuration (pool passwords are **not** returned).
 
 ---
 
-## POST `/api/v1/config`
+## POST `/api/config`
 
-Change configuration. Only the provided fields are updated. A restart is usually required after saving.
+Change configuration. Only the provided fields are updated. A restart is required after saving.
 
 **Request:**
 ```json
@@ -198,7 +217,7 @@ Change configuration. Only the provided fields are updated. A restart is usually
 
 ---
 
-## POST `/api/v1/action/restart`
+## POST `/api/system/restart`
 
 Soft reboot of the miner.
 
@@ -206,7 +225,9 @@ Soft reboot of the miner.
 { "status": "restarting" }
 ```
 
-## POST `/api/v1/action/reset`
+---
+
+## POST `/api/system/reset`
 
 Factory reset — clears all NVS entries and reboots. WiFi setup is required again afterwards.
 
@@ -216,14 +237,13 @@ Factory reset — clears all NVS entries and reboots. WiFi setup is required aga
 
 ---
 
-## POST `/api/v1/ota`
+## POST `/api/ota`
 
-Uploads a compiled PlatformIO firmware image (`firmware.bin`) as multipart form
-data. On success the miner restarts automatically.
+Uploads a compiled PlatformIO firmware image (`firmware.bin`) as multipart form data. On success the miner restarts automatically.
 
 **Request:**
 ```bash
-curl -X POST http://192.168.1.123/api/v1/ota \
+curl -X POST http://192.168.1.123/api/ota \
   -F firmware=@.pio/build/esp32dev/firmware.bin
 ```
 
@@ -238,80 +258,25 @@ curl -X POST http://192.168.1.123/api/v1/ota \
 
 ---
 
-## HashHive / NMMiner-compatible endpoints
+## GET `/api/info`
 
-HashHive's current discovery scanner probes NMMiner-like devices with
-`GET /probe`, then polls `GET /api/system/info`. WroomMiner exposes compatible
-endpoints so it can be discovered by the same flow.
-
-### GET `/probe`
+Firmware metadata.
 
 ```json
 {
-  "model": "WroomMiner",
-  "hostname": "wroomminer",
-  "ver": "0.1.0",
-  "hr": 10148.7,
-  "sbd": 0.0,
-  "ebd": 0.0,
-  "ut": 3712,
-  "mac": "AA:BB:CC:DD:EE:FF",
-  "api": "wroomminer"
+  "firmware": "WroomMiner",
+  "version": "0.1.0",
+  "build_date": "Jun  5 2026 12:00:00",
+  "api_version": "1"
 }
 ```
-
-### GET `/api/system/info`
-
-```json
-{
-  "identity": {
-    "model": "WroomMiner",
-    "hostName": "wroomminer",
-    "fwVersion": "0.1.0",
-    "mac": "AA:BB:CC:DD:EE:FF",
-    "rssi": -67,
-    "ip": "192.168.1.123"
-  },
-  "miner": {
-    "hashRate": 10148.7,
-    "hashRateUnit": "H/s",
-    "hashRateHs": 10148.7,
-    "hashRate1mHs": 9000.0,
-    "uptimeSeconds": 3712,
-    "bestDiffEver": 0.0,
-    "lastDiff": 0.0,
-    "sAccepted": 0,
-    "sRejected": 0,
-    "blocksFound": 0
-  },
-  "stratum": {
-    "url": "solo.ckpool.org:3333",
-    "user": "bc1q....wroom01",
-    "connected": true,
-    "active": "fallback"
-  },
-  "temps": {
-    "asic": null,
-    "vcore": null
-  },
-  "storage": {
-    "freeHeap": 142336
-  },
-  "compatible_with": "HashHive",
-  "api": "wroomminer"
-}
-```
-
-`miner.hashRate` is reported in native WroomMiner H/s. The `hashRateUnit` field
-marks the unit explicitly for dashboards that support mixed miner classes.
 
 ---
 
 ## WebSocket `/ws`
 
-Sends a tick event once per second with current mining metrics — ideal for HashHive live dashboards.
+Sends a tick event once per second with current mining metrics.
 
-**Event format:**
 ```json
 {
   "type": "tick",
@@ -326,29 +291,18 @@ Sends a tick event once per second with current mining metrics — ideal for Has
 
 ---
 
-## Integration with HashHive
+## UDP Discovery
 
-HashHive can register WroomMiner as a device type alongside BitAxe and NerdAxe. Recommended workflow:
-
-1. **Discovery:** UDP broadcast on port `12345`
-2. **Health check:** GET `/api/v1/info` → verify `compatible_with == "HashHive"`
-3. **Live data:** WebSocket `/ws` for real-time hashrate
-4. **Polling fallback:** GET `/api/v1/status` every 5–10 seconds
-
-Discovery packets are JSON broadcasts sent every `udp_broadcast_sec` seconds
-when WiFi is connected:
+WroomMiner broadcasts a JSON packet on UDP port `12345` every `udp_broadcast_sec` seconds when WiFi is connected. HashHive uses this for automatic device discovery.
 
 ```json
 {
   "type": "wroomminer_discovery",
   "name": "WroomMiner",
   "version": "0.1.0",
-  "compatible_with": "HashHive",
   "ip": "192.168.1.123",
   "mac": "AA:BB:CC:DD:EE:FF",
   "api_port": 80,
-  "api_base": "http://192.168.1.123:80",
-  "ws_path": "/ws",
   "hashrate_hs": 412000,
   "shares_accepted": 8,
   "uptime_seconds": 3712
@@ -360,14 +314,17 @@ when WiFi is connected:
 ## Example: cURL
 
 ```bash
-# Query status
-curl http://192.168.1.123/api/v1/status
+# Discovery snapshot
+curl http://192.168.1.123/api/probe
+
+# Mining stats
+curl http://192.168.1.123/api/mining
 
 # Switch pool
-curl -X POST http://192.168.1.123/api/v1/config \
+curl -X POST http://192.168.1.123/api/config \
   -H "Content-Type: application/json" \
   -d '{"pool_primary_url":"pool.nerdminers.org","pool_primary_port":3333}'
 
 # Restart
-curl -X POST http://192.168.1.123/api/v1/action/restart
+curl -X POST http://192.168.1.123/api/system/restart
 ```

@@ -15,7 +15,7 @@ This turns the miner into a **first-class citizen** in HashHive — comparable t
 
 ### What sets it apart from NerdMiner / NMminer
 
-- **Complete REST API** with 10+ endpoints (`/api/v1/...`)
+- **Complete REST API** with 10+ endpoints (`/api/...`)
 - **WebSocket livestream** for real-time hashrate and share events
 - **UDP LAN broadcast** for automatic discovery by HashHive
 - **OTA updates** via the API — no more USB cable required
@@ -56,7 +56,7 @@ pio device monitor
 2. Connect (no password) and open `http://192.168.4.1`
 3. Enter WiFi, pool URL and BTC wallet
 4. Save → the miner starts automatically
-5. Query status via `http://<miner-ip>/api/v1/status`
+5. Query status via `http://<miner-ip>/api/status`
 
 ### Flashing in the browser
 
@@ -72,17 +72,18 @@ Full documentation in [`docs/API.md`](docs/API.md). Overview:
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/v1/status` | GET | Compact system overview |
-| `/api/v1/mining` | GET | Hashrate, shares, best diff, uptime |
-| `/api/v1/pool` | GET | Pool URL, port, connection status |
-| `/api/v1/network` | GET | SSID, RSSI, IP, MAC |
-| `/api/v1/system` | GET | Chip info, heap, CPU frequency, temperature |
-| `/api/v1/config` | GET/POST | Read/write configuration |
-| `/api/v1/stats` | GET | Session + all-time statistics |
-| `/api/v1/info` | GET | Firmware version, build date |
-| `/api/v1/action/restart` | POST | Soft reboot |
-| `/api/v1/action/reset` | POST | Factory reset (clears NVS) |
-| `/api/v1/ota` | POST | OTA firmware update |
+| `/api/probe` | GET | Compact discovery snapshot |
+| `/api/status` | GET | Compact system overview |
+| `/api/mining` | GET | Hashrate, shares, best diff, uptime |
+| `/api/pool` | GET | Pool URL, port, connection status |
+| `/api/network` | GET | SSID, RSSI, IP, MAC |
+| `/api/system` | GET | Chip info, heap, CPU frequency, temperature |
+| `/api/config` | GET/POST | Read/write configuration |
+| `/api/stats` | GET | Session + all-time statistics |
+| `/api/info` | GET | Firmware version, build date |
+| `/api/system/restart` | POST | Soft reboot |
+| `/api/system/reset` | POST | Factory reset (clears NVS) |
+| `/api/ota` | POST | OTA firmware update |
 | `/ws` | WS | WebSocket livestream |
 
 ---

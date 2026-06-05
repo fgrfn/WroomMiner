@@ -365,12 +365,16 @@ void MiningEngine::taskLoop(uint8_t workerId) {
         }
 
         // --- Hash a batch of nonces ---
-        // 8192 hashes per batch; yields once per batch for watchdog + job check.
-        constexpr uint32_t BATCH = 8192;
+        // 32768 hashes per batch. At ~200-400 KH/s per core this is ~80-160 ms,
+        // well under the 5-second TWDT timeout. Yield only after a full batch;
+        // on epoch change we exit early and immediately pick up the new job.
+        constexpr uint32_t BATCH = 32768;
         uint32_t hashesDone = 0;
+        bool fullBatch = true;
 
         for (uint32_t i = 0; i < BATCH; ++i) {
             if (localEpoch != _jobEpoch) {
+                fullBatch = false;
                 break;
             }
 
@@ -421,18 +425,20 @@ void MiningEngine::taskLoop(uint8_t workerId) {
             }
         }
 
-        // Count actual nonce attempts processed in this batch.
         if (hashesDone > 0) {
             Stats::recordHashes(hashesDone);
         }
 
-        // Small yield so the watchdog doesn't bite
-        // (1 tick at 1ms tick rate = 1ms pause per batch)
         if (uxTaskGetStackHighWaterMark(nullptr) < 1024) {
             log_w("Mining: low stack: %u bytes free",
                   uxTaskGetStackHighWaterMark(nullptr));
         }
-        vTaskDelay(1);
+
+        // Yield once per full batch so the watchdog idle task can run.
+        // Skip the yield on early exit — the new job is ready immediately.
+        if (fullBatch) {
+            vTaskDelay(1);
+        }
     }
 
     log_i("Mining worker %u exiting", workerId);
